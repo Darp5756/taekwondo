@@ -1,4 +1,4 @@
-import { date, id, optionalId, smallInt, smallUInt, text, z } from './lib/validation.js';
+import { date, id, nonNegativeSmallInt, optionalId, smallInt, smallUInt, text, z } from './lib/validation.js';
 
 // Definición de las tablas que exponen un CRUD genérico en /api/<path>.
 export const resources = [
@@ -88,8 +88,8 @@ export const resources = [
       estado: z.enum(['pendiente', 'en_curso', 'finalizado']).default('pendiente'),
       puntos_rojo: smallInt.default(0),
       puntos_azul: smallInt.default(0),
-      amonestaciones_rojo: smallInt.min(0).default(0),
-      amonestaciones_azul: smallInt.min(0).default(0),
+      amonestaciones_rojo: nonNegativeSmallInt.default(0),
+      amonestaciones_azul: nonNegativeSmallInt.default(0),
     }),
     check: (d) => {
       if (d.id_taekwondista_rojo === d.id_taekwondista_azul)

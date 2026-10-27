@@ -161,6 +161,10 @@ describe('API', { skip }, () => {
       assert.equal(rango.status, 400);
       assert.match(rango.body.error, /edad mínima/);
 
+      const vacio = await request.post('/api/cintas').set(auth()).send({ nombre: 'Gris', orden: '' });
+      assert.equal(vacio.status, 400);
+      assert.deepEqual(vacio.body.details, [{ field: 'orden', message: 'Campo obligatorio' }]);
+
       assert.equal((await request.get('/api/academias/abc').set(auth())).status, 400);
     });
 

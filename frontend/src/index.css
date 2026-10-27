@@ -1,0 +1,41 @@
+@import 'tailwindcss';
+
+/* Colores tomados del marcador original (docs/marcador-original.html). */
+@theme {
+  --color-tkd-red: #d90429;
+  --color-tkd-blue: #004e98;
+  --color-tkd-gold: #ffb703;
+  --color-tkd-dark: #0a0a0a;
+  --font-sans: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-tkd-dark text-neutral-100 antialiased;
+  }
+}
+
+/* Uso: className="btn btn-primary" */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-tkd-gold text-black hover:brightness-110;
+  }
+  .btn-secondary {
+    @apply border border-white/15 bg-white/5 text-neutral-100 hover:bg-white/10;
+  }
+  .btn-danger {
+    @apply bg-tkd-red text-white hover:brightness-110;
+  }
+  .input {
+    @apply w-full rounded-lg border border-white/15 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-500 focus:border-tkd-gold focus:ring-1 focus:ring-tkd-gold focus:outline-none;
+  }
+  .label {
+    @apply mb-1 block text-xs font-semibold tracking-wide text-neutral-400 uppercase;
+  }
+  .card {
+    @apply rounded-2xl border border-white/10 bg-neutral-900/70;
+  }
+}

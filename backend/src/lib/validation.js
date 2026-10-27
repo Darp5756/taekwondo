@@ -2,15 +2,35 @@ import { z } from 'zod';
 
 z.config(z.locales.es());
 
-const emptyToNull = (v) => (v === '' || v === undefined ? null : v);
+const isBlank = (v) => v === '' || v === null || v === undefined;
 
-export const id = z.coerce.number().int().positive();
-export const optionalId = z.preprocess(emptyToNull, id.nullable());
-export const text = (max) => z.string().trim().min(1).max(max);
-export const smallUInt = z.coerce.number().int().min(0).max(255);
-export const smallInt = z.coerce.number().int().min(-32768).max(32767);
+// Enteros que aceptan número o texto numérico (formularios). Un valor vacío
+// se trata como ausente, no como 0.
+const integer = (min, max) =>
+  z.preprocess(
+    (v) => (isBlank(v) ? undefined : typeof v === 'string' ? Number(v) : v),
+    z
+      .number({ error: (iss) => (iss.input === undefined ? 'Campo obligatorio' : 'Debe ser un número') })
+      .int('Debe ser un número entero')
+      .min(min)
+      .max(max),
+  );
+
+export const id = integer(1, 2147483647);
+export const optionalId = z.preprocess((v) => (isBlank(v) ? null : v), id.nullable());
+export const smallUInt = integer(0, 255);
+export const smallInt = integer(-32768, 32767);
+export const nonNegativeSmallInt = integer(0, 32767);
+
+export const text = (max) =>
+  z
+    .string({ error: (iss) => (iss.input === undefined ? 'Campo obligatorio' : 'Debe ser texto') })
+    .trim()
+    .min(1, 'Campo obligatorio')
+    .max(max);
+
 export const date = z
-  .string()
+  .string({ error: 'Campo obligatorio' })
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Debe tener formato AAAA-MM-DD')
   .refine((s) => !Number.isNaN(Date.parse(s)), 'Fecha inválida');
 

@@ -1,0 +1,81 @@
+// Esquema actualizado (el que implementa backend/db/schema.sql).
+// Cambios respecto a schema-original.dbml:
+//  - Nueva tabla usuarios (login).
+//  - tinyint -> smallint (PostgreSQL).
+//  - Corregida la relación combates -> competencias y agregadas las FK
+//    de combates hacia taekwondistas (rojo, azul, ganador).
+
+enum estado_pendiente_en_curso_finalizado_t {
+	pendiente
+	en_curso
+	finalizado
+}
+
+Table usuarios [headercolor: #ffb703] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(100) [ not null ]
+	email varchar(150) [ not null, unique ]
+	password_hash varchar(100) [ not null ]
+	rol varchar(20) [ not null, default: 'operador', note: 'admin | operador' ]
+	activo boolean [ not null, default: true ]
+	creado_en timestamptz [ not null, default: `now()` ]
+}
+
+Table academias [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(100) [ not null, unique ]
+}
+
+Table categorias [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(50) [ not null ]
+	edad_minima smallint [ not null ]
+	edad_maxima smallint [ not null ]
+	peso_minimo_kg smallint [ not null ]
+	peso_maximo_kg smallint [ not null ]
+}
+
+Table cintas [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(30) [ not null, unique ]
+	orden smallint [ not null, unique ]
+}
+
+Table competencias [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(100) [ not null ]
+	fecha date [ not null ]
+	lugar varchar(150) [ not null ]
+}
+
+Table danes [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(20) [ not null, unique ]
+	numero smallint [ not null, unique ]
+}
+
+Table taekwondistas [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	id_academia integer [ not null, ref: > academias.id ]
+	id_categoria integer [ not null, ref: > categorias.id ]
+	id_cinta integer [ not null, ref: > cintas.id ]
+	id_dan integer [ ref: > danes.id ]
+	nombre varchar(150) [ not null ]
+	fecha_nacimiento date [ not null ]
+	peso_kg smallint [ not null ]
+}
+
+Table combates [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	id_competencia integer [ not null, ref: > competencias.id ]
+	id_categoria integer [ not null, ref: > categorias.id ]
+	id_taekwondista_rojo integer [ not null, ref: > taekwondistas.id ]
+	id_taekwondista_azul integer [ not null, ref: > taekwondistas.id ]
+	id_taekwondista_ganador integer [ ref: > taekwondistas.id ]
+	ronda varchar(20) [ not null ]
+	estado estado_pendiente_en_curso_finalizado_t [ not null, default: 'pendiente' ]
+	puntos_rojo smallint [ not null, default: 0 ]
+	puntos_azul smallint [ not null, default: 0 ]
+	amonestaciones_rojo smallint [ not null, default: 0 ]
+	amonestaciones_azul smallint [ not null, default: 0 ]
+}
