@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITF Taekwondo Scoreboard - Pro</title>
+    <style>
+        :root {
+            --red: #d90429;
+            --blue: #004e98;
+            --dark: #0a0a0a;
+            --gold: #ffb703;
+            --panel-bg: rgba(20, 20, 20, 0.98);
+        }
+
+        body {
+            background-color: var(--dark);
+            color: white;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Botón Flotante Presi. De Mesa */
+        #presi-btn {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            font-weight: 600;
+            transition: 0.3s;
+        }
+
+        #presi-btn:hover { background: rgba(255, 255, 255, 0.2); }
+
+        /* Panel Lateral del Presidente */
+        #admin-panel {
+            position: fixed;
+            top: 0;
+            right: -420px;
+            width: 380px;
+            height: 100%;
+            background: var(--panel-bg);
+            box-shadow: -10px 0 30px rgba(0,0,0,0.8);
+            z-index: 1000;
+            transition: transform 0.4s cubic-bezier(0.075, 0.82, 0.165, 1);
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #admin-panel.open { transform: translateX(-420px); }
+
+        .close-x {
+            align-self: flex-end;
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 2rem;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .close-x:hover { color: white; }
+
+        .admin-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* Marcador y Tiempo */
+        #header {
+            text-align: center;
+            padding: 20px 0;
+            background: #111;
+            border-bottom: 2px solid #222;
+        }
+
+        #time {
+            font-size: 8rem;
+            font-weight: 800;
+            color: var(--gold);
+            font-family: monospace;
+            margin: 0;
+        }
+
+        .match-container {
+            display: flex;
+            flex: 1;
+        }
+
+        .side {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .red-side { background-color: var(--red); }
+        .blue-side { background-color: var(--blue); }
+
+        .score-val {
+            font-size: 18rem;
+            font-weight: 900;
+            margin: 0;
+            text-shadow: 5px 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .warning-count {
+            font-size: 1.8rem;
+            background: rgba(0,0,0,0.3);
+            padding: 5px 20px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* Botonera de Árbitros */
+        .points-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .btn-p {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 2px solid white;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .btn-p:active { background: white; color: black; }
+
+        /* Botones Panel Admin */
+        .admin-btn {
+            width: 100%;
+            padding: 15px;
+            margin: 8px 0;
+            border-radius: 10px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .btn-red-adm { background: #ff4d4d; color: white; }
+        .btn-blue-adm { background: #4d94ff; color: white; }
+        .btn-deduct { background: transparent; border: 2px solid white; color: white; }
+
+    </style>
+</head>
+<body>
+
+    <button id="presi-btn" onclick="togglePanel()">Presi. De Mesa</button>
+
+    <div id="admin-panel">
+        <button class="close-x" onclick="togglePanel()">&times;</button>
+        <h2 style="color: var(--gold); text-align: center; margin-top: 0;">Panel de Control</h2>
+        
+        <div class="admin-section">
+            <h3 style="color: #ff4d4d; margin-top: 0;">ROJO</h3>
+            <button class="admin-btn btn-red-adm" onclick="addWarning('red')">+1 Aviso (Chuy-young)</button>
+            <button class="admin-btn btn-deduct" onclick="addPoint('red', -1)">-1 Deducción (Gam-jum)</button>
+        </div>
+
+        <div class="admin-section">
+            <h3 style="color: #4d94ff; margin-top: 0;">AZUL</h3>
+            <button class="admin-btn btn-blue-adm" onclick="addWarning('blue')">+1 Aviso (Chuy-young)</button>
+            <button class="admin-btn btn-deduct" onclick="addPoint('blue', -1)">-1 Deducción (Gam-jum)</button>
+        </div>
+
+        <p style="font-size: 0.9rem; color: #666; text-align: center;">Nota: 3 avisos restan automáticamente 1 punto.</p>
+    </div>
+
+    <div id="header">
+        <div id="time">01:30</div>
+        <div style="margin-top: 10px;">
+            <button onclick="startStop()" id="btn-timer" style="padding: 10px 40px; font-weight: bold; border-radius: 5px; cursor:pointer;">INICIAR</button>
+            <button onclick="reset()" style="padding: 10px 40px; background: #333; color: white; border: none; border-radius: 5px; cursor:pointer; margin-left: 10px;">RESET</button>
+        </div>
+    </div>
+
+    <div class="match-container">
+        <div class="side red-side">
+            <div class="warning-count">Avisos: <span id="w-red">0</span></div>
+            <div class="score-val" id="s-red">0</div>
+            <div class="points-grid">
+                <button class="btn-p" onclick="addPoint('red', 1)">1</button>
+                <button class="btn-p" onclick="addPoint('red', 2)">2</button>
+                <button class="btn-p" onclick="addPoint('red', 3)">3</button>
+            </div>
+        </div>
+
+        <div class="side blue-side">
+            <div class="warning-count">Avisos: <span id="w-blue">0</span></div>
+            <div class="score-val" id="s-blue">0</div>
+            <div class="points-grid">
+                <button class="btn-p" onclick="addPoint('blue', 1)">1</button>
+                <button class="btn-p" onclick="addPoint('blue', 2)">2</button>
+                <button class="btn-p" onclick="addPoint('blue', 3)">3</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let state = {
+            red: { score: 0, warnings: 0 },
+            blue: { score: 0, warnings: 0 },
+            time: 90,
+            running: false,
+            interval: null
+        };
+
+        function togglePanel() {
+            document.getElementById('admin-panel').classList.toggle('open');
+        }
+
+        function updateUI() {
+            document.getElementById('s-red').innerText = state.red.score;
+            document.getElementById('s-blue').innerText = state.blue.score;
+            document.getElementById('w-red').innerText = state.red.warnings;
+            document.getElementById('w-blue').innerText = state.blue.warnings;
+        }
+
+        function addPoint(color, pts) {
+            state[color].score += pts;
+            updateUI();
+        }
+
+        function addWarning(color) {
+            state[color].warnings++;
+            if (state[color].warnings % 3 === 0) {
+                state[color].score--; // Regla oficial ITF
+            }
+            updateUI();
+        }
+
+        function startStop() {
+            const btn = document.getElementById('btn-timer');
+            if (state.running) {
+                clearInterval(state.interval);
+                btn.innerText = "REANUDAR";
+            } else {
+                state.interval = setInterval(() => {
+                    if (state.time > 0) {
+                        state.time--;
+                        renderTime();
+                    } else {
+                        clearInterval(state.interval);
+                        alert("FINAL DEL ROUND");
+                    }
+                }, 1000);
+                btn.innerText = "PAUSA";
+            }
+            state.running = !state.running;
+        }
+
+        function renderTime() {
+            let m = Math.floor(state.time / 60);
+            let s = state.time % 60;
+            document.getElementById('time').innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        function reset() {
+            clearInterval(state.interval);
+            state = {
+                red: { score: 0, warnings: 0 },
+                blue: { score: 0, warnings: 0 },
+                time: 90,
+                running: false,
+                interval: null
+            };
+            document.getElementById('btn-timer').innerText = "INICIAR";
+            renderTime();
+            updateUI();
+        }
+    </script>
+</body>
+</html>

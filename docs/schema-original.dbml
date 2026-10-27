@@ -1,0 +1,88 @@
+enum estado_pendiente_en_curso_finalizado_t {
+	pendiente
+	en_curso
+	finalizado
+}
+
+Table academias [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(100) [ not null, unique ]
+}
+
+Table categorias [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(50) [ not null ]
+	edad_minima tinyint [ not null ]
+	edad_maxima tinyint [ not null ]
+	peso_minimo_kg tinyint [ not null ]
+	peso_maximo_kg tinyint [ not null ]
+}
+
+Table cintas [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(30) [ not null, unique ]
+	orden tinyint [ not null, unique ]
+}
+
+Table competencias [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(100) [ not null ]
+	fecha date [ not null ]
+	lugar varchar(150) [ not null ]
+}
+
+Table danes [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(20) [ not null, unique ]
+	numero tinyint [ not null, unique ]
+}
+
+Table taekwondistas [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	id_academia integer [ not null ]
+	id_categoria integer [ not null ]
+	id_cinta integer [ not null ]
+	id_dan integer
+	nombre varchar(150) [ not null ]
+	fecha_nacimiento date [ not null ]
+	peso_kg tinyint [ not null ]
+}
+
+Table combates [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	id_competencia integer [ not null ]
+	id_categoria integer [ not null ]
+	id_taekwondista_rojo integer [ not null ]
+	id_taekwondista_azul integer [ not null ]
+	id_taekwondista_ganador integer
+	ronda varchar(20) [ not null ]
+	estado estado_pendiente_en_curso_finalizado_t [ not null, default: 'pendiente' ]
+	puntos_rojo smallint [ not null, default: 0 ]
+	puntos_azul smallint [ not null, default: 0 ]
+	amonestaciones_rojo smallint [ not null, default: 0 ]
+	amonestaciones_azul smallint [ not null, default: 0 ]
+}
+
+Ref fk_taekwondistas_id_academia_academias {
+	taekwondistas.id_academia > academias.id [ delete: no action, update: no action ]
+}
+
+Ref fk_taekwondistas_id_categoria_categorias {
+	taekwondistas.id_categoria > categorias.id [ delete: no action, update: no action ]
+}
+
+Ref fk_taekwondistas_id_cinta_cintas {
+	taekwondistas.id_cinta > cintas.id [ delete: no action, update: no action ]
+}
+
+Ref fk_taekwondistas_id_dan_danes {
+	taekwondistas.id_dan > danes.id [ delete: no action, update: no action ]
+}
+
+Ref fk_competencias_id_combates {
+	competencias.id < combates.id [ delete: no action, update: no action ]
+}
+
+Ref fk_combates_id_categoria_categorias {
+	combates.id_categoria > categorias.id [ delete: no action, update: no action ]
+}
