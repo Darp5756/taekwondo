@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { requireRole } from '../middleware/auth.js';
 import { HttpError } from './http-error.js';
+import { assertNoActiveDependents, assertReferencesActive } from './relations.js';
 import { id as idSchema } from './validation.js';
 
 const MAX_LIMIT = 500;
@@ -13,8 +15,13 @@ function pageParams(q) {
 
 const escapeLike = (s) => s.replace(/[\\%_]/g, '\\$&');
 
+const ACTIVE = 't.eliminado_en IS NULL';
+const DELETED = 't.eliminado_en IS NOT NULL';
+
 /**
  * Crea un router REST (GET lista, GET uno, POST, PUT, PATCH, DELETE) para una tabla.
+ * El DELETE es lógico: marca eliminado_en y el registro deja de aparecer, pero
+ * un admin puede verlo con ?eliminados=true y recuperarlo con POST /:id/restaurar.
  *
  * - fields: z.object con las columnas editables.
  * - check: validación entre campos; devuelve un mensaje de error o null.
@@ -29,30 +36,36 @@ export function crudRouter({ table, fields, check, select, search = [], filters 
 
   const parseId = (raw) => idSchema.parse(raw);
 
-  async function findById(id) {
-    const { rows } = await query(`${baseSelect} WHERE t.id = $1`, [id]);
+  async function findById(id, condition = ACTIVE) {
+    const { rows } = await query(`${baseSelect} WHERE t.id = $1 AND ${condition}`, [id]);
     return rows[0];
   }
 
-  function validate(data) {
+  async function validate(data) {
     const parsed = fields.parse(data ?? {});
     const message = check?.(parsed);
     if (message) throw new HttpError(400, message);
+    await assertReferencesActive(table, parsed);
     return parsed;
   }
 
   async function update(id, data) {
     const sets = columns.map((c, i) => `${c} = $${i + 1}`).join(', ');
     const { rowCount } = await query(
-      `UPDATE ${table} SET ${sets} WHERE id = $${columns.length + 1}`,
+      `UPDATE ${table} SET ${sets} WHERE id = $${columns.length + 1} AND eliminado_en IS NULL`,
       [...columns.map((c) => data[c]), id],
     );
     if (!rowCount) throw new HttpError(404, 'Registro no encontrado');
     return findById(id);
   }
 
+  // Solo un admin puede ver la papelera.
+  router.get('/', (req, res, next) =>
+    req.query.eliminados === 'true' ? requireRole('admin')(req, res, next) : next(),
+  );
+
   router.get('/', async (req, res) => {
-    const where = [];
+    const where = [req.query.eliminados === 'true' ? DELETED : ACTIVE];
     const params = [];
 
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
@@ -68,7 +81,7 @@ export function crudRouter({ table, fields, check, select, search = [], filters 
       }
     }
 
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const whereSql = `WHERE ${where.join(' AND ')}`;
     const { limit, offset } = pageParams(req.query);
     const [list, count] = await Promise.all([
       query(
@@ -87,7 +100,7 @@ export function crudRouter({ table, fields, check, select, search = [], filters 
   });
 
   router.post('/', async (req, res) => {
-    const data = validate(req.body);
+    const data = await validate(req.body);
     const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
     const { rows } = await query(
       `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id`,
@@ -98,24 +111,40 @@ export function crudRouter({ table, fields, check, select, search = [], filters 
 
   router.put('/:id', async (req, res) => {
     const id = parseId(req.params.id);
-    res.json(await update(id, validate(req.body)));
+    res.json(await update(id, await validate(req.body)));
   });
 
   // PATCH combina el registro actual con los campos recibidos y valida el
   // resultado completo, así las reglas entre campos siguen aplicando.
   router.patch('/:id', async (req, res) => {
     const id = parseId(req.params.id);
-    const { rows } = await query(`SELECT * FROM ${table} WHERE id = $1`, [id]);
+    const { rows } = await query(`SELECT * FROM ${table} WHERE id = $1 AND eliminado_en IS NULL`, [id]);
     if (!rows[0]) throw new HttpError(404, 'Registro no encontrado');
     const current = Object.fromEntries(columns.map((c) => [c, rows[0][c]]));
     const patch = Object.fromEntries(Object.entries(req.body ?? {}).filter(([k]) => columns.includes(k)));
-    res.json(await update(id, validate({ ...current, ...patch })));
+    res.json(await update(id, await validate({ ...current, ...patch })));
   });
 
   router.delete('/:id', async (req, res) => {
-    const { rowCount } = await query(`DELETE FROM ${table} WHERE id = $1`, [parseId(req.params.id)]);
+    const id = parseId(req.params.id);
+    await assertNoActiveDependents(table, id);
+    const { rowCount } = await query(
+      `UPDATE ${table} SET eliminado_en = now() WHERE id = $1 AND eliminado_en IS NULL`,
+      [id],
+    );
     if (!rowCount) throw new HttpError(404, 'Registro no encontrado');
     res.status(204).end();
+  });
+
+  router.post('/:id/restaurar', requireRole('admin'), async (req, res) => {
+    const id = parseId(req.params.id);
+    const { rows } = await query(`SELECT * FROM ${table} WHERE id = $1 AND eliminado_en IS NOT NULL`, [id]);
+    if (!rows[0]) throw new HttpError(404, 'No hay un registro eliminado con ese id');
+    await assertReferencesActive(table, rows[0]);
+    // Si mientras tanto se creó otro registro activo con el mismo valor único,
+    // el índice parcial lo impide y se responde 409.
+    await query(`UPDATE ${table} SET eliminado_en = NULL WHERE id = $1`, [id]);
+    res.json(await findById(id));
   });
 
   return router;

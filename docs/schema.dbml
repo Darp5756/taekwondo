@@ -4,6 +4,9 @@
 //  - tinyint -> smallint (PostgreSQL).
 //  - Corregida la relación combates -> competencias y agregadas las FK
 //    de combates hacia taekwondistas (rojo, azul, ganador).
+//  - Nueva tabla estados (Venezuela) y taekwondistas.id_estado.
+//  - Borrado lógico: todas las tablas tienen eliminado_en. Los campos "unique"
+//    son únicos solo entre registros activos (índices parciales).
 
 enum estado_pendiente_en_curso_finalizado_t {
 	pendiente
@@ -19,11 +22,19 @@ Table usuarios [headercolor: #ffb703] {
 	rol varchar(20) [ not null, default: 'operador', note: 'admin | operador' ]
 	activo boolean [ not null, default: true ]
 	creado_en timestamptz [ not null, default: `now()` ]
+	eliminado_en timestamptz [ note: 'NULL = activo' ]
 }
 
 Table academias [headercolor: #175e7a] {
 	id integer [ pk, increment, not null ]
 	nombre varchar(100) [ not null, unique ]
+	eliminado_en timestamptz [ note: 'NULL = activo' ]
+}
+
+Table estados [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(50) [ not null, unique ]
+	eliminado_en timestamptz [ note: 'NULL = activo' ]
 }
 
 Table categorias [headercolor: #175e7a] {
@@ -33,12 +44,14 @@ Table categorias [headercolor: #175e7a] {
 	edad_maxima smallint [ not null ]
 	peso_minimo_kg smallint [ not null ]
 	peso_maximo_kg smallint [ not null ]
+	eliminado_en timestamptz [ note: 'NULL = activo' ]
 }
 
 Table cintas [headercolor: #175e7a] {
 	id integer [ pk, increment, not null ]
 	nombre varchar(30) [ not null, unique ]
 	orden smallint [ not null, unique ]
+	eliminado_en timestamptz [ note: 'NULL = activo' ]
 }
 
 Table competencias [headercolor: #175e7a] {
@@ -46,12 +59,14 @@ Table competencias [headercolor: #175e7a] {
 	nombre varchar(100) [ not null ]
 	fecha date [ not null ]
 	lugar varchar(150) [ not null ]
+	eliminado_en timestamptz [ note: 'NULL = activo' ]
 }
 
 Table danes [headercolor: #175e7a] {
 	id integer [ pk, increment, not null ]
 	nombre varchar(20) [ not null, unique ]
 	numero smallint [ not null, unique ]
+	eliminado_en timestamptz [ note: 'NULL = activo' ]
 }
 
 Table taekwondistas [headercolor: #175e7a] {
@@ -60,9 +75,11 @@ Table taekwondistas [headercolor: #175e7a] {
 	id_categoria integer [ not null, ref: > categorias.id ]
 	id_cinta integer [ not null, ref: > cintas.id ]
 	id_dan integer [ ref: > danes.id ]
+	id_estado integer [ ref: > estados.id, note: 'Obligatorio en la API; nullable por registros anteriores' ]
 	nombre varchar(150) [ not null ]
 	fecha_nacimiento date [ not null ]
 	peso_kg smallint [ not null ]
+	eliminado_en timestamptz [ note: 'NULL = activo' ]
 }
 
 Table combates [headercolor: #175e7a] {
@@ -78,4 +95,5 @@ Table combates [headercolor: #175e7a] {
 	puntos_azul smallint [ not null, default: 0 ]
 	amonestaciones_rojo smallint [ not null, default: 0 ]
 	amonestaciones_azul smallint [ not null, default: 0 ]
+	eliminado_en timestamptz [ note: 'NULL = activo' ]
 }

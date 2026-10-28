@@ -4,7 +4,8 @@
 --   * Se corrige la relación combates -> competencias (combates.id_competencia).
 --   * Se agregan las FK de combates hacia taekwondistas (rojo, azul y ganador).
 --   * Se agrega la tabla usuarios para el login.
--- Es idempotente: se puede ejecutar varias veces sin perder datos.
+-- Escrito de forma idempotente porque las bases creadas antes del sistema de
+-- migraciones ya tienen estas tablas: en ellas esta migración no cambia nada.
 
 DO $$ BEGIN
   CREATE TYPE estado_pendiente_en_curso_finalizado_t AS ENUM ('pendiente', 'en_curso', 'finalizado');

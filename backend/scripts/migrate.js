@@ -1,11 +1,9 @@
-import { readFile } from 'node:fs/promises';
-import { closePool, query } from '../src/db.js';
-
-const sql = await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8');
+import { migrate } from '../db/migrator.js';
+import { closePool, getPool } from '../src/db.js';
 
 try {
-  await query(sql);
-  console.log('Esquema aplicado correctamente');
+  const applied = await migrate(getPool(), console.log);
+  console.log(applied.length ? `${applied.length} migración(es) aplicada(s)` : 'La base ya estaba al día');
 } finally {
   await closePool();
 }

@@ -13,8 +13,10 @@ Monorepo con dos proyectos Node.js preparados para desplegar en Vercel:
 - **Login** con email y contraseña, sesión con JWT (8 h por defecto) y cambio de contraseña.
 - **Configuración inicial**: si la base no tiene usuarios, la pantalla de login permite crear el primer administrador (no hace falta correr scripts en producción).
 - **Roles**: `admin` (todo, incluida la gestión de usuarios) y `operador` (todo excepto usuarios). Desactivar un usuario corta su acceso de inmediato.
-- **CRUD** de academias, categorías, cintas, danes, competencias, taekwondistas, combates y usuarios, con búsqueda, filtros, paginación y validación con mensajes en español.
-- **Integridad**: no se pueden borrar registros que otros usan (p. ej. una competencia con combates), los rivales de un combate deben ser distintos y el ganador debe ser uno de ellos, rangos de edad/peso coherentes, etc.
+- **CRUD** de academias, estados, categorías, cintas, danes, competencias, taekwondistas, combates y usuarios, con búsqueda, filtros, paginación y validación con mensajes en español.
+- **Estados de Venezuela**: cada taekwondista pertenece a un estado (los 23 estados y el Distrito Capital vienen en el seed).
+- **Borrado lógico**: eliminar no borra la fila, la marca con `eliminado_en` y deja de aparecer. Los administradores tienen una **papelera** en cada pantalla para ver lo eliminado y restaurarlo. Un nombre eliminado se puede volver a usar.
+- **Integridad**: no se pueden eliminar registros que otros registros activos usan (p. ej. una competencia con combates), no se puede asignar un registro eliminado (p. ej. una academia), los rivales de un combate deben ser distintos y el ganador debe ser uno de ellos, rangos de edad/peso coherentes, etc.
 - **Marcador** (`/combates/:id/marcador`): versión en React de `docs/marcador-original.html`. Los puntos y avisos se guardan solos en el combate; al iniciar el tiempo el combate pasa a "en curso" y desde el panel del presidente de mesa se finaliza eligiendo ganador.
 
 ## Desarrollo local
@@ -24,8 +26,8 @@ Requisitos: Node.js 22+ y PostgreSQL (local, Docker o una base gratuita de [Neon
 ```bash
 npm install                                  # instala ambos proyectos (npm workspaces)
 cp backend/.env.example backend/.env         # y completa DATABASE_URL y JWT_SECRET
-npm run db:migrate                           # crea las tablas (se puede repetir sin perder datos)
-npm run db:seed                              # opcional: cintas y danes ITF + admin de ADMIN_EMAIL/ADMIN_PASSWORD
+npm run db:migrate                           # aplica las migraciones pendientes
+npm run db:seed                              # cintas, danes, estados + admin de ADMIN_EMAIL/ADMIN_PASSWORD (opcional)
 npm run dev                                  # API en :3000 y web en http://localhost:5173
 ```
 
@@ -42,6 +44,17 @@ npm test
 
 Son tests de integración de la API contra PostgreSQL real (login, permisos, CRUD, validaciones, reglas de combates).
 
+## Migraciones y seed
+
+Los dos comandos son **idempotentes**: se pueden correr todas las veces que quieras sin duplicar ni perder datos.
+
+- **Migraciones** (`npm run db:migrate`): los archivos de `backend/db/migrations/` se aplican en orden y cada uno queda registrado en la tabla `schema_migrations`, así que solo corren los pendientes. Cada migración va en su propia transacción (si falla, no queda a medias) y un lock evita que dos ejecuciones simultáneas choquen.
+- **Seed** (`npm run db:seed`): inserta cada cinta, dan, estado y el admin solo si no existe uno con el mismo nombre/email, **incluidos los eliminados**. Así no duplica nada y tampoco restaura lo que se haya borrado a propósito desde la aplicación.
+
+Para cambiar el esquema, **no edites una migración ya aplicada**: crea un archivo nuevo con el siguiente número (`003_descripcion.sql`). Conviene escribirlo con `IF NOT EXISTS` / `IF EXISTS`, como los actuales.
+
+> La migración `001` es el esquema original. Las bases creadas antes de que existieran las migraciones ya tienen esas tablas; como `001` está escrita con `IF NOT EXISTS`, en ellas no cambia nada y solo queda registrada.
+
 ## Despliegue en Vercel
 
 Se crean **dos proyectos de Vercel** apuntando a este mismo repositorio, cambiando el *Root Directory*.
@@ -54,6 +67,8 @@ Crea una base PostgreSQL (Vercel → Storage → Neon, o directamente en neon.te
 DATABASE_URL="postgres://..." npm run db:migrate
 DATABASE_URL="postgres://..." npm run db:seed     # opcional
 ```
+
+Cada vez que se agreguen migraciones o datos al seed, repite esos dos comandos contra la base de producción **antes** de desplegar el código nuevo. Las migraciones están pensadas para que el código anterior siga funcionando con el esquema nuevo, pero el código nuevo no funciona con el esquema anterior.
 
 ### 2. Backend
 
@@ -96,23 +111,29 @@ CRUD genérico para `academias`, `categorias`, `cintas`, `danes`, `competencias`
 | POST   | `/<recurso>`      | Crea; responde 201 con el registro                                          |
 | PUT    | `/<recurso>/:id`  | Reemplaza todos los campos                                                  |
 | PATCH  | `/<recurso>/:id`  | Actualiza solo los campos enviados (lo usa el marcador)                     |
-| DELETE | `/<recurso>/:id`  | 204; 409 si otros registros dependen de él                                  |
+| DELETE | `/<recurso>/:id`  | Borrado lógico. 204; 409 si otros registros activos dependen de él          |
+| GET    | `/<recurso>?eliminados=true` | Solo `admin`: la papelera (acepta los mismos filtros)            |
+| POST   | `/<recurso>/:id/restaurar`   | Solo `admin`. 409 si ya existe otro activo con el mismo valor único; 400 si apunta a un registro eliminado |
 
-Filtros disponibles: `taekwondistas?id_academia=&id_categoria=&id_cinta=&id_dan=` y `combates?id_competencia=&id_categoria=&estado=`.
+`/usuarios` también tiene `?eliminados=true` y `POST /usuarios/:id/restaurar`. Un usuario eliminado no puede iniciar sesión y su token deja de funcionar.
+
+Filtros disponibles: `taekwondistas?id_academia=&id_categoria=&id_cinta=&id_dan=&id_estado=` y `combates?id_competencia=&id_categoria=&estado=`.
 Las listas de `taekwondistas` y `combates` incluyen los nombres de los registros relacionados (`academia`, `categoria`, `taekwondista_rojo`, ...).
 
 Errores: `{ error, details? }` con 400 (validación; `details` = `[{ field, message }]`), 401, 403, 404 o 409.
 
-Para agregar una tabla nueva basta con crearla en `backend/db/schema.sql`, definirla en `backend/src/resources.js` y agregar su pantalla en `frontend/src/resources.jsx`.
+Para agregar una tabla nueva: créala en una migración nueva (con su columna `eliminado_en timestamptz`), defínela en `backend/src/resources.js` y agrega su pantalla en `frontend/src/resources.jsx`. Las comprobaciones de relaciones del borrado lógico leen las FK de PostgreSQL, así que no hay que configurarlas.
 
 ## Base de datos
 
-`backend/db/schema.sql` implementa `docs/schema-original.dbml` en PostgreSQL con estos ajustes (el esquema resultante está en `docs/schema.dbml`):
+Las migraciones de `backend/db/migrations/` implementan `docs/schema-original.dbml` en PostgreSQL con estos ajustes (el esquema resultante está en `docs/schema.dbml`):
 
 - `tinyint` → `smallint` (PostgreSQL no tiene `tinyint`), con `CHECK` de 0 a 255.
 - En el DBML original la relación `competencias.id < combates.id` unía los `id` de ambas tablas; se cambió por `combates.id_competencia → competencias.id`.
 - Se agregaron las FK de `combates` hacia `taekwondistas` (rojo, azul, ganador), que no estaban en el diagrama.
 - Nueva tabla `usuarios` para el login.
+- Nueva tabla `estados` y columna `taekwondistas.id_estado`. En la base es nullable para no romper los competidores que ya estaban cargados; la API la exige al crear o editar, así que al editar uno antiguo hay que elegirle el estado.
+- Columna `eliminado_en` en todas las tablas (borrado lógico). Los `UNIQUE` pasaron a índices únicos parciales (`WHERE eliminado_en IS NULL`).
 
 ## Diseño con Stitch
 
@@ -139,11 +160,14 @@ Los colores del marcador original ya están disponibles como clases: `bg-tkd-red
 ```
 backend/
   api/index.js            entrada serverless para Vercel
-  db/schema.sql           esquema PostgreSQL
-  scripts/                migrate.js y seed.js
+  db/migrations/          migraciones SQL numeradas
+  db/migrator.js          aplica las migraciones pendientes
+  db/seeder.js            datos base (cintas, danes, estados)
+  scripts/                migrate.js y seed.js (comandos npm)
   src/app.js              app Express (rutas y middlewares)
   src/resources.js        definición y validación de cada tabla
-  src/lib/crud.js         router CRUD genérico
+  src/lib/crud.js         router CRUD genérico (con borrado lógico y papelera)
+  src/lib/relations.js    comprobaciones de relaciones con registros eliminados
   src/routes/             auth y usuarios
   test/                   tests de integración
 frontend/

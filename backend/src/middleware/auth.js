@@ -24,7 +24,7 @@ export async function requireAuth(req, res, next) {
   }
 
   const { rows } = await query(
-    'SELECT id, nombre, email, rol, activo FROM usuarios WHERE id = $1',
+    'SELECT id, nombre, email, rol, activo FROM usuarios WHERE id = $1 AND eliminado_en IS NULL',
     [Number(payload.sub)],
   );
   const user = rows[0];

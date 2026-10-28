@@ -42,6 +42,13 @@ export const resources = [
     orderBy: 't.numero',
   },
   {
+    path: 'estados',
+    table: 'estados',
+    fields: z.object({ nombre: text(50) }),
+    search: ['t.nombre'],
+    orderBy: 't.nombre',
+  },
+  {
     path: 'competencias',
     table: 'competencias',
     fields: z.object({ nombre: text(100), fecha: date, lugar: text(150) }),
@@ -56,6 +63,7 @@ export const resources = [
       id_categoria: id,
       id_cinta: id,
       id_dan: optionalId,
+      id_estado: id,
       nombre: text(150),
       fecha_nacimiento: date,
       peso_kg: smallUInt,
@@ -65,14 +73,16 @@ export const resources = [
         ? 'La fecha de nacimiento no puede ser futura'
         : null,
     select: `
-      SELECT t.*, a.nombre AS academia, c.nombre AS categoria, ci.nombre AS cinta, d.nombre AS dan
+      SELECT t.*, a.nombre AS academia, c.nombre AS categoria, ci.nombre AS cinta, d.nombre AS dan,
+             es.nombre AS estado
       FROM taekwondistas t
       JOIN academias a ON a.id = t.id_academia
       JOIN categorias c ON c.id = t.id_categoria
       JOIN cintas ci ON ci.id = t.id_cinta
-      LEFT JOIN danes d ON d.id = t.id_dan`,
-    search: ['t.nombre', 'a.nombre'],
-    filters: ['id_academia', 'id_categoria', 'id_cinta', 'id_dan'],
+      LEFT JOIN danes d ON d.id = t.id_dan
+      LEFT JOIN estados es ON es.id = t.id_estado`,
+    search: ['t.nombre', 'a.nombre', 'es.nombre'],
+    filters: ['id_academia', 'id_categoria', 'id_cinta', 'id_dan', 'id_estado'],
     orderBy: 't.nombre',
   },
   {

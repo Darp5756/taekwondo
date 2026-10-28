@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../api.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import Alert from '../components/Alert.jsx';
 import Modal from '../components/Modal.jsx';
 import ResourceForm from '../components/ResourceForm.jsx';
@@ -10,7 +11,11 @@ import { RowActionLink } from '../resources.jsx';
 
 const PAGE_SIZE = 20;
 
+const formatDateTime = (iso) => new Date(iso).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' });
+
 export default function CrudPage({ resource }) {
+  const { user } = useAuth();
+  const isAdmin = user.rol === 'admin';
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = resource.filters ?? [];
   const filterParams = Object.fromEntries(filters.map((f) => [f.name, searchParams.get(f.name) ?? '']));
@@ -25,6 +30,7 @@ export default function CrudPage({ resource }) {
   const [editing, setEditing] = useState(null); // null | 'new' | fila
   const [deleting, setDeleting] = useState(null);
   const [deleteError, setDeleteError] = useState('');
+  const [trash, setTrash] = useState(false); // papelera: registros eliminados (solo admin)
   const filterRows = useSourceRows(filters);
 
   useEffect(() => {
@@ -42,13 +48,14 @@ export default function CrudPage({ resource }) {
       const params = resource.noPagination
         ? {}
         : { q, limit: PAGE_SIZE, offset: page * PAGE_SIZE, ...JSON.parse(filterKey) };
+      if (trash) params.eliminados = 'true';
       setResult(await api(`/${resource.path}`, { params }));
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [resource.path, resource.noPagination, q, page, filterKey]);
+  }, [resource.path, resource.noPagination, q, page, filterKey, trash]);
 
   useEffect(() => {
     load();
@@ -73,6 +80,21 @@ export default function CrudPage({ resource }) {
     }
   };
 
+  const restore = async (row) => {
+    setError('');
+    try {
+      await api(`/${resource.path}/${row.id}/restaurar`, { method: 'POST' });
+      load();
+    } catch (err) {
+      setError(`No se pudo restaurar: ${err.message}`);
+    }
+  };
+
+  const toggleTrash = () => {
+    setTrash((t) => !t);
+    setPage(0);
+  };
+
   const pages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
 
   return (
@@ -82,11 +104,26 @@ export default function CrudPage({ resource }) {
           <h1 className="text-2xl font-bold">
             {resource.icon} {resource.title}
           </h1>
-          <p className="text-sm text-neutral-400">{result.total} registro(s)</p>
+          <p className="text-sm text-neutral-400">
+            {result.total} {trash ? 'en la papelera' : 'registro(s)'}
+          </p>
         </div>
-        <button onClick={() => setEditing('new')} className="btn btn-primary">
-          + Nuevo {resource.singular}
-        </button>
+        <div className="flex gap-2">
+          {isAdmin && (
+            <button
+              onClick={toggleTrash}
+              className={`btn ${trash ? 'bg-white text-black' : 'btn-secondary'}`}
+              aria-pressed={trash}
+            >
+              {trash ? '← Volver' : '🗑️ Papelera'}
+            </button>
+          )}
+          {!trash && (
+            <button onClick={() => setEditing('new')} className="btn btn-primary">
+              + Nuevo {resource.singular}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -131,6 +168,7 @@ export default function CrudPage({ resource }) {
                     {c.label}
                   </th>
                 ))}
+                {trash && <th className="px-4 py-3 font-semibold">Eliminado</th>}
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -142,31 +180,40 @@ export default function CrudPage({ resource }) {
                       {c.render ? c.render(row) : (row[c.key] ?? <span className="text-neutral-600">—</span>)}
                     </td>
                   ))}
+                  {trash && <td className="px-4 py-3 whitespace-nowrap">{formatDateTime(row.eliminado_en)}</td>}
                   <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      {resource.rowActions?.map((a) => (
-                        <RowActionLink key={a.label} action={a} row={row} />
-                      ))}
-                      <button onClick={() => setEditing(row)} className="btn btn-secondary px-3 py-1">
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => {
-                          setDeleteError('');
-                          setDeleting(row);
-                        }}
-                        className="btn px-3 py-1 text-red-300 hover:bg-tkd-red/20"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
+                    {trash ? (
+                      <div className="flex justify-end">
+                        <button onClick={() => restore(row)} className="btn btn-secondary px-3 py-1">
+                          Restaurar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        {resource.rowActions?.map((a) => (
+                          <RowActionLink key={a.label} action={a} row={row} />
+                        ))}
+                        <button onClick={() => setEditing(row)} className="btn btn-secondary px-3 py-1">
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDeleteError('');
+                            setDeleting(row);
+                          }}
+                          className="btn px-3 py-1 text-red-300 hover:bg-tkd-red/20"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
               {!result.data.length && (
                 <tr>
-                  <td colSpan={resource.columns.length + 1} className="px-4 py-10 text-center text-neutral-500">
-                    No hay registros
+                  <td colSpan={resource.columns.length + 2} className="px-4 py-10 text-center text-neutral-500">
+                    {trash ? 'La papelera está vacía' : 'No hay registros'}
                   </td>
                 </tr>
               )}
@@ -210,7 +257,10 @@ export default function CrudPage({ resource }) {
       {deleting && (
         <Modal title={`Eliminar ${resource.singular}`} onClose={() => setDeleting(null)}>
           <div className="space-y-4">
-            <p className="text-neutral-300">¿Seguro que quieres eliminar este registro? Esta acción no se puede deshacer.</p>
+            <p className="text-neutral-300">
+              ¿Seguro que quieres eliminar este registro? Dejará de aparecer en la aplicación; un administrador puede
+              recuperarlo desde la papelera.
+            </p>
             <Alert>{deleteError}</Alert>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeleting(null)} className="btn btn-secondary">

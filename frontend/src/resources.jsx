@@ -140,6 +140,7 @@ export const resources = [
     filters: [
       { name: 'id_academia', label: 'Academia', source: { path: 'academias', label: (a) => a.nombre } },
       { name: 'id_categoria', label: 'Categoría', source: { path: 'categorias', label: (c) => c.nombre } },
+      { name: 'id_estado', label: 'Estado', source: { path: 'estados', label: (e) => e.nombre } },
     ],
     fields: [
       { name: 'nombre', label: 'Nombre completo', required: true, maxLength: 150 },
@@ -152,6 +153,7 @@ export const resources = [
         required: true,
         source: { path: 'academias', label: (a) => a.nombre },
       },
+      { name: 'id_estado', label: 'Estado', type: 'select', required: true, source: { path: 'estados', label: (e) => e.nombre } },
       {
         name: 'id_categoria',
         label: 'Categoría',
@@ -168,6 +170,7 @@ export const resources = [
     columns: [
       { key: 'nombre', label: 'Nombre' },
       { key: 'academia', label: 'Academia' },
+      { key: 'estado', label: 'Estado' },
       { key: 'categoria', label: 'Categoría' },
       { key: 'cinta', label: 'Cinta' },
       { key: 'dan', label: 'Dan' },
@@ -183,6 +186,15 @@ export const resources = [
     fields: [{ name: 'nombre', label: 'Nombre', required: true, maxLength: 100 }],
     columns: [{ key: 'nombre', label: 'Nombre' }],
     rowActions: [{ label: 'Alumnos', to: (r) => `/taekwondistas?id_academia=${r.id}` }],
+  },
+  {
+    path: 'estados',
+    title: 'Estados',
+    singular: 'estado',
+    icon: '📍',
+    fields: [{ name: 'nombre', label: 'Nombre', required: true, maxLength: 50 }],
+    columns: [{ key: 'nombre', label: 'Nombre' }],
+    rowActions: [{ label: 'Competidores', to: (r) => `/taekwondistas?id_estado=${r.id}` }],
   },
   {
     path: 'categorias',

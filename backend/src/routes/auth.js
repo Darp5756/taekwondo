@@ -18,7 +18,7 @@ const router = Router();
 
 router.post('/login', async (req, res) => {
   const { email, password } = loginSchema.parse(req.body ?? {});
-  const { rows } = await query('SELECT * FROM usuarios WHERE email = $1', [email]);
+  const { rows } = await query('SELECT * FROM usuarios WHERE email = $1 AND eliminado_en IS NULL', [email]);
   const user = rows[0];
   const ok = await verifyPassword(password, user?.password_hash ?? DUMMY_HASH);
   if (!user || !ok || !user.activo) throw new HttpError(401, 'Email o contraseña incorrectos');
@@ -41,10 +41,10 @@ router.put('/password', requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
-// Configuración inicial: mientras no exista ningún usuario, permite crear el
+// Configuración inicial: mientras no exista ningún usuario activo, permite crear el
 // primer administrador desde la pantalla de login.
 router.get('/setup', async (req, res) => {
-  const { rows } = await query('SELECT NOT EXISTS (SELECT 1 FROM usuarios) AS needs_setup');
+  const { rows } = await query('SELECT NOT EXISTS (SELECT 1 FROM usuarios WHERE eliminado_en IS NULL) AS needs_setup');
   res.json({ needsSetup: rows[0].needs_setup });
 });
 
@@ -53,7 +53,7 @@ router.post('/setup', async (req, res) => {
   const { rows } = await query(
     `INSERT INTO usuarios (nombre, email, password_hash, rol)
      SELECT $1, $2, $3, 'admin'
-     WHERE NOT EXISTS (SELECT 1 FROM usuarios)
+     WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE eliminado_en IS NULL)
      RETURNING *`,
     [data.nombre, data.email, await hashPassword(data.password)],
   );
