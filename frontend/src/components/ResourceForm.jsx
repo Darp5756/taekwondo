@@ -61,12 +61,14 @@ export default function ResourceForm({ resource, row, onSaved, onCancel }) {
     }
   };
 
+  const visibleFields = resource.fields.filter((f) => !f.showIf || f.showIf(values));
+
   return (
     <form onSubmit={submit} className="space-y-4" noValidate={false}>
       <Alert>{error}</Alert>
       <div className="grid gap-4 sm:grid-cols-2">
-        {resource.fields.map((field) => (
-          <div key={field.name} className={resource.fields.length === 1 ? 'sm:col-span-2' : undefined}>
+        {visibleFields.map((field) => (
+          <div key={field.name} className={visibleFields.length === 1 ? 'sm:col-span-2' : undefined}>
             <Field
               field={field}
               value={values[field.name]}

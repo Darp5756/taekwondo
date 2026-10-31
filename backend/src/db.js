@@ -30,3 +30,20 @@ export async function closePool() {
     pool = undefined;
   }
 }
+
+// Ejecuta fn(client) dentro de una transacción. Todo lo que se haga con ese
+// client se confirma junto o se revierte junto si algo falla.
+export async function transaction(fn) {
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}

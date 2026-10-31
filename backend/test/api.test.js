@@ -1,6 +1,7 @@
 // Tests de integración contra PostgreSQL real.
 // Usan TEST_DATABASE_URL, que se BORRA y recrea en cada ejecución.
 import assert from 'node:assert/strict';
+import { readdir } from 'node:fs/promises';
 import { after, before, describe, test } from 'node:test';
 
 const skip = !process.env.TEST_DATABASE_URL && 'Define TEST_DATABASE_URL para correr los tests';
@@ -28,14 +29,16 @@ describe('API', { skip }, () => {
 
   describe('migraciones y seed', () => {
     test('las migraciones se aplican una sola vez', async () => {
+      const archivos = (await readdir(new URL('../db/migrations/', import.meta.url))).sort();
       const first = await migrate(getPool());
-      assert.deepEqual(first, ['001_esquema_inicial.sql', '002_estados_y_borrado_logico.sql']);
+      assert.deepEqual(first, archivos);
+      assert.ok(first.includes('005_llaves_y_encuentros.sql'));
       assert.deepEqual(await migrate(getPool()), []);
     });
 
     test('el seed carga los catálogos y no duplica al repetirse', async () => {
-      assert.deepEqual(await seed(query), { cintas: 11, danes: 9, estados: 24, admin: 0 });
-      assert.deepEqual(await seed(query), { cintas: 0, danes: 0, estados: 0, admin: 0 });
+      assert.deepEqual(await seed(query), { cintas: 11, danes: 9, estados: 24, tules: 24, admin: 0 });
+      assert.deepEqual(await seed(query), { cintas: 0, danes: 0, estados: 0, tules: 0, admin: 0 });
       const { rows } = await query('SELECT count(*)::int AS n FROM estados');
       assert.equal(rows[0].n, 24);
     });
@@ -215,6 +218,66 @@ describe('API', { skip }, () => {
       assert.equal((await request.get('/api/academias/abc').set(auth())).status, 400);
     });
 
+    test('categorías: reglas por modalidad', async () => {
+      const tul = (q) => request.get(`/api/tules?q=${q}`).set(auth()).then((r) => r.body.data[0].id);
+      const base = { nombre: 'Tul Juvenil 1er Dan', modalidad: 'tul', edad_minima: 14, edad_maxima: 17 };
+      const kwangGae = await tul('kwang');
+      const geBaek = await tul('ge-baek');
+
+      const sinTules = await request.post('/api/categorias').set(auth()).send(base);
+      assert.equal(sinTules.status, 400);
+      assert.deepEqual(sinTules.body.details.map((d) => d.field), ['id_tul_desde', 'id_tul_hasta']);
+
+      const alReves = await request
+        .post('/api/categorias')
+        .set(auth())
+        .send({ ...base, id_tul_desde: geBaek, id_tul_hasta: kwangGae });
+      assert.equal(alReves.status, 400);
+      assert.equal(alReves.body.details[0].field, 'id_tul_desde');
+
+      const par = await request
+        .post('/api/categorias')
+        .set(auth())
+        .send({ ...base, id_tul_desde: kwangGae, id_tul_hasta: geBaek, jueces: 4 });
+      assert.equal(par.status, 400);
+      assert.equal(par.body.details[0].field, 'jueces');
+
+      const ok = await request
+        .post('/api/categorias')
+        .set(auth())
+        .send({
+          ...base,
+          id_tul_desde: kwangGae,
+          id_tul_hasta: geBaek,
+          peso_minimo_kg: 40,
+          peso_maximo_kg: 60,
+          sexo: 'masculino',
+        });
+      assert.equal(ok.status, 201, JSON.stringify(ok.body));
+      assert.equal(ok.body.peso_minimo_kg, null, 'el peso no aplica en tul');
+      assert.equal(ok.body.tul_desde, 'Kwang-Gae');
+      assert.equal(ok.body.jueces, 3);
+      assert.equal(ok.body.eleccion_tul, 'sorteo');
+
+      const matsogiSinPeso = await request
+        .post('/api/categorias')
+        .set(auth())
+        .send({ nombre: 'Sin peso', edad_minima: 10, edad_maxima: 12 });
+      assert.equal(matsogiSinPeso.status, 400);
+      assert.deepEqual(matsogiSinPeso.body.details.map((d) => d.field), ['peso_minimo_kg', 'peso_maximo_kg']);
+
+      const cinta = (orden) => request.get('/api/cintas').set(auth()).then((r) => r.body.data.find((c) => c.orden === orden).id);
+      const verde = await cinta(5);
+      const blancaAmarilla = await cinta(2);
+      const grado = await request
+        .post('/api/categorias')
+        .set(auth())
+        .send({ nombre: 'Color', edad_minima: 8, edad_maxima: 10, peso_minimo_kg: 20, peso_maximo_kg: 40,
+                id_cinta_minima: verde, id_cinta_maxima: blancaAmarilla });
+      assert.equal(grado.status, 400);
+      assert.equal(grado.body.details[0].field, 'id_cinta_minima');
+    });
+
     test('catálogos y taekwondistas con relaciones', async () => {
       ids.categoria = (
         await create('categorias', {
@@ -234,6 +297,7 @@ describe('API', { skip }, () => {
         id_categoria: ids.categoria,
         id_cinta: ids.cinta,
         id_estado: ids.estado,
+        sexo: 'femenino',
         fecha_nacimiento: '2010-05-20',
         peso_kg: 55,
       };
@@ -384,6 +448,7 @@ describe('API', { skip }, () => {
         id_cinta: ids.cinta,
         id_estado: ids.estado,
         nombre: 'Dani Efímera',
+        sexo: 'femenino',
         fecha_nacimiento: '2011-01-01',
         peso_kg: 52,
       });

@@ -45,6 +45,7 @@ export default function Field({ field, value, onChange, error, options = [], isE
         maxLength={field.maxLength}
         min={field.min}
         max={field.max}
+        step={field.step}
         placeholder={isEdit && field.editPlaceholder ? field.editPlaceholder : field.placeholder}
         autoComplete={field.type === 'password' ? 'new-password' : undefined}
       />
@@ -58,7 +59,11 @@ export default function Field({ field, value, onChange, error, options = [], isE
         {required && <span className="text-tkd-gold"> *</span>}
       </label>
       {control}
-      {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
+      {error ? (
+        <p className="mt-1 text-xs text-red-300">{error}</p>
+      ) : (
+        field.help && <p className="mt-1 text-xs text-neutral-500">{field.help}</p>
+      )}
     </div>
   );
 }

@@ -12,7 +12,7 @@ try {
       ? { nombre: ADMIN_NOMBRE, email: ADMIN_EMAIL, passwordHash: await hashPassword(ADMIN_PASSWORD) }
       : undefined;
   const r = await seed(query, { admin });
-  console.log(`Registros nuevos: ${r.cintas} cintas, ${r.danes} danes, ${r.estados} estados`);
+  console.log(`Registros nuevos: ${r.cintas} cintas, ${r.danes} danes, ${r.estados} estados, ${r.tules} tules`);
   if (admin) console.log(r.admin ? `Administrador creado: ${ADMIN_EMAIL}` : `El usuario ${ADMIN_EMAIL} ya existía`);
 } finally {
   await closePool();

@@ -1,4 +1,4 @@
-// Datos base: cintas y danes ITF, entidades federales de Venezuela y,
+// Datos base: cintas, danes y tules ITF, entidades federales de Venezuela y,
 // opcionalmente, un usuario administrador.
 //
 // Es idempotente: cada registro se inserta solo si no existe ya uno con el
@@ -20,6 +20,34 @@ export const CINTAS = [
 ];
 
 export const DANES = ['1er Dan', '2do Dan', '3er Dan', '4to Dan', '5to Dan', '6to Dan', '7mo Dan', '8vo Dan', '9no Dan'];
+
+// Los 24 tules ITF, en el orden en que se aprenden.
+export const TULES = [
+  'Chon-Ji',
+  'Dan-Gun',
+  'Do-San',
+  'Won-Hyo',
+  'Yul-Gok',
+  'Joong-Gun',
+  'Toi-Gye',
+  'Hwa-Rang',
+  'Choong-Moo',
+  'Kwang-Gae',
+  'Po-Eun',
+  'Ge-Baek',
+  'Eui-Am',
+  'Choong-Jang',
+  'Juche',
+  'Sam-Il',
+  'Yoo-Sin',
+  'Choi-Yong',
+  'Yon-Gae',
+  'Ul-Ji',
+  'Moon-Moo',
+  'So-San',
+  'Se-Jong',
+  'Tong-Il',
+];
 
 // Los 23 estados más el Distrito Capital.
 export const ESTADOS = [
@@ -82,6 +110,14 @@ export async function seed(query, { admin } = {}) {
        WHERE NOT EXISTS (SELECT 1 FROM estados WHERE nombre = $1)
        ON CONFLICT DO NOTHING`,
       ESTADOS.map((nombre) => [nombre]),
+    ),
+    tules: await insertMissing(
+      query,
+      `INSERT INTO tules (nombre, orden)
+       SELECT $1::varchar, $2::smallint
+       WHERE NOT EXISTS (SELECT 1 FROM tules WHERE nombre = $1)
+       ON CONFLICT DO NOTHING`,
+      TULES.map((nombre, i) => [nombre, i + 1]),
     ),
     admin: 0,
   };

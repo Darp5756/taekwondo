@@ -6,6 +6,8 @@ import { Link } from 'react-router';
 //          - source:  { path, label } para cargar opciones de otra tabla
 //          - options: lista fija [{ value, label }]
 //          - filter:  (opcion, valoresDelFormulario) => boolean, para limitar opciones
+//          - showIf:  (valoresDelFormulario) => boolean, para mostrar el campo solo en algunos casos
+//          - help:    texto de ayuda bajo el campo
 // columns: columnas de la tabla ({ key, label, render? })
 
 export const ESTADOS = [
@@ -28,6 +30,29 @@ export function EstadoBadge({ estado }) {
 const formatDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('es') : '');
 
 const taekwondistaLabel = (t) => `${t.nombre} · ${t.academia}`;
+
+export const MODALIDADES = [
+  { value: 'matsogi', label: 'Matsogi (combate)' },
+  { value: 'tul', label: 'Tul (formas)' },
+];
+export const modalidadLabel = (m) => (m === 'tul' ? 'Tul' : 'Matsogi');
+export const categoriaLabel = (c) => `${c.nombre} · ${modalidadLabel(c.modalidad)}`;
+
+const SEXOS = [
+  { value: 'femenino', label: 'Femenino' },
+  { value: 'masculino', label: 'Masculino' },
+];
+const SEXOS_CATEGORIA = [{ value: 'mixto', label: 'Mixto' }, ...SEXOS];
+const sexoLabel = (v) => SEXOS_CATEGORIA.find((s) => s.value === v)?.label ?? '';
+
+const esTul = (form) => form.modalidad === 'tul';
+const esMatsogi = (form) => form.modalidad !== 'tul';
+
+const rango = (min, max, sufijo = '') => {
+  if (min == null && max == null) return null;
+  if (min === max) return `${min}${sufijo}`;
+  return `${min ?? '…'} – ${max ?? '…'}${sufijo}`;
+};
 
 export const resources = [
   {
@@ -139,11 +164,12 @@ export const resources = [
     icon: '🥋',
     filters: [
       { name: 'id_academia', label: 'Academia', source: { path: 'academias', label: (a) => a.nombre } },
-      { name: 'id_categoria', label: 'Categoría', source: { path: 'categorias', label: (c) => c.nombre } },
       { name: 'id_estado', label: 'Estado', source: { path: 'estados', label: (e) => e.nombre } },
+      { name: 'sexo', label: 'Sexo', options: SEXOS },
     ],
     fields: [
       { name: 'nombre', label: 'Nombre completo', required: true, maxLength: 150 },
+      { name: 'sexo', label: 'Sexo', type: 'select', required: true, options: SEXOS },
       { name: 'fecha_nacimiento', label: 'Fecha de nacimiento', type: 'date', required: true },
       { name: 'peso_kg', label: 'Peso (kg)', type: 'number', min: 0, max: 255, required: true },
       {
@@ -154,24 +180,21 @@ export const resources = [
         source: { path: 'academias', label: (a) => a.nombre },
       },
       { name: 'id_estado', label: 'Estado', type: 'select', required: true, source: { path: 'estados', label: (e) => e.nombre } },
-      {
-        name: 'id_categoria',
-        label: 'Categoría',
-        type: 'select',
-        required: true,
-        source: {
-          path: 'categorias',
-          label: (c) => `${c.nombre} (${c.edad_minima}-${c.edad_maxima} años, ${c.peso_minimo_kg}-${c.peso_maximo_kg} kg)`,
-        },
-      },
       { name: 'id_cinta', label: 'Cinta', type: 'select', required: true, source: { path: 'cintas', label: (c) => c.nombre } },
       { name: 'id_dan', label: 'Dan', type: 'select', source: { path: 'danes', label: (d) => d.nombre } },
+      {
+        name: 'id_categoria',
+        label: 'Categoría habitual',
+        type: 'select',
+        source: { path: 'categorias', label: categoriaLabel },
+        help: 'Opcional. La categoría en la que compite se elige en cada inscripción.',
+      },
     ],
     columns: [
       { key: 'nombre', label: 'Nombre' },
+      { key: 'sexo', label: 'Sexo', render: (r) => sexoLabel(r.sexo) || null },
       { key: 'academia', label: 'Academia' },
       { key: 'estado', label: 'Estado' },
-      { key: 'categoria', label: 'Categoría' },
       { key: 'cinta', label: 'Cinta' },
       { key: 'dan', label: 'Dan' },
       { key: 'peso_kg', label: 'Peso', render: (r) => `${r.peso_kg} kg` },
@@ -201,17 +224,129 @@ export const resources = [
     title: 'Categorías',
     singular: 'categoría',
     icon: '📋',
+    filters: [
+      { name: 'modalidad', label: 'Modalidad', options: MODALIDADES },
+      { name: 'sexo', label: 'Sexo', options: SEXOS_CATEGORIA },
+    ],
     fields: [
       { name: 'nombre', label: 'Nombre', required: true, maxLength: 50 },
+      { name: 'modalidad', label: 'Modalidad', type: 'select', required: true, options: MODALIDADES, default: 'matsogi' },
+      { name: 'sexo', label: 'Sexo', type: 'select', required: true, options: SEXOS_CATEGORIA, default: 'mixto' },
       { name: 'edad_minima', label: 'Edad mínima', type: 'number', min: 0, max: 255, required: true },
       { name: 'edad_maxima', label: 'Edad máxima', type: 'number', min: 0, max: 255, required: true },
-      { name: 'peso_minimo_kg', label: 'Peso mínimo (kg)', type: 'number', min: 0, max: 255, required: true },
-      { name: 'peso_maximo_kg', label: 'Peso máximo (kg)', type: 'number', min: 0, max: 255, required: true },
+      {
+        name: 'peso_minimo_kg',
+        label: 'Peso mínimo (kg)',
+        type: 'number',
+        min: 0,
+        max: 255,
+        required: true,
+        showIf: esMatsogi,
+      },
+      {
+        name: 'peso_maximo_kg',
+        label: 'Peso máximo (kg)',
+        type: 'number',
+        min: 0,
+        max: 255,
+        required: true,
+        showIf: esMatsogi,
+      },
+      {
+        name: 'id_tul_desde',
+        label: 'Tules permitidos: desde',
+        type: 'select',
+        required: true,
+        showIf: esTul,
+        source: { path: 'tules', label: (t) => `${t.orden}. ${t.nombre}` },
+      },
+      {
+        name: 'id_tul_hasta',
+        label: 'Tules permitidos: hasta',
+        type: 'select',
+        required: true,
+        showIf: esTul,
+        source: { path: 'tules', label: (t) => `${t.orden}. ${t.nombre}` },
+      },
+      {
+        name: 'tules_por_encuentro',
+        label: 'Tules por encuentro',
+        type: 'select',
+        required: true,
+        showIf: esTul,
+        default: '1',
+        options: [
+          { value: '1', label: '1' },
+          { value: '2', label: '2' },
+        ],
+      },
+      {
+        name: 'eleccion_tul',
+        label: 'Cómo se elige el tul',
+        type: 'select',
+        required: true,
+        showIf: esTul,
+        default: 'sorteo',
+        options: [
+          { value: 'sorteo', label: 'Sorteo automático' },
+          { value: 'manual', label: 'Lo elige la mesa' },
+        ],
+      },
+      {
+        name: 'jueces',
+        label: 'Jueces',
+        type: 'number',
+        min: 1,
+        max: 9,
+        step: 2,
+        required: true,
+        showIf: esTul,
+        default: 3,
+        help: 'Número impar: no hay votos de empate.',
+      },
+      {
+        name: 'id_cinta_minima',
+        label: 'Cinta mínima',
+        type: 'select',
+        source: { path: 'cintas', label: (c) => c.nombre },
+        help: 'Opcional: restringe la categoría por grado.',
+      },
+      { name: 'id_cinta_maxima', label: 'Cinta máxima', type: 'select', source: { path: 'cintas', label: (c) => c.nombre } },
+      { name: 'id_dan_minimo', label: 'Dan mínimo', type: 'select', source: { path: 'danes', label: (d) => d.nombre } },
+      { name: 'id_dan_maximo', label: 'Dan máximo', type: 'select', source: { path: 'danes', label: (d) => d.nombre } },
     ],
     columns: [
       { key: 'nombre', label: 'Nombre' },
-      { key: 'edad', label: 'Edad', render: (r) => `${r.edad_minima} – ${r.edad_maxima} años` },
-      { key: 'peso', label: 'Peso', render: (r) => `${r.peso_minimo_kg} – ${r.peso_maximo_kg} kg` },
+      { key: 'modalidad', label: 'Modalidad', render: (r) => modalidadLabel(r.modalidad) },
+      { key: 'sexo', label: 'Sexo', render: (r) => sexoLabel(r.sexo) },
+      { key: 'edad', label: 'Edad', render: (r) => rango(r.edad_minima, r.edad_maxima, ' años') },
+      {
+        key: 'detalle',
+        label: 'Peso / Tules',
+        render: (r) =>
+          r.modalidad === 'tul'
+            ? `${rango(r.tul_desde, r.tul_hasta)} · ${r.jueces} jueces`
+            : rango(r.peso_minimo_kg, r.peso_maximo_kg, ' kg'),
+      },
+      {
+        key: 'grado',
+        label: 'Grado',
+        render: (r) => [rango(r.cinta_minima, r.cinta_maxima), rango(r.dan_minimo, r.dan_maximo)].filter(Boolean).join(' · ') || null,
+      },
+    ],
+  },
+  {
+    path: 'tules',
+    title: 'Tules',
+    singular: 'tul',
+    icon: '🌀',
+    fields: [
+      { name: 'nombre', label: 'Nombre', required: true, maxLength: 30 },
+      { name: 'orden', label: 'Orden', type: 'number', min: 0, max: 255, required: true },
+    ],
+    columns: [
+      { key: 'orden', label: 'Orden' },
+      { key: 'nombre', label: 'Nombre' },
     ],
   },
   {
