@@ -266,7 +266,13 @@ export const resources = [
         source: { path: 'inscripciones', label: inscripcionLabel },
         filter: (i, form) => [String(form.id_inscripcion_rojo), String(form.id_inscripcion_azul)].includes(String(i.id)),
       },
-      { name: 'tipo_victoria', label: 'Tipo de victoria', type: 'select', options: TIPOS_VICTORIA },
+      {
+        name: 'tipo_victoria',
+        label: 'Tipo de victoria',
+        type: 'select',
+        // 'votos' y 'bye' los asigna el sistema (marcador de tul y llaves).
+        options: TIPOS_VICTORIA.filter((t) => !['votos', 'bye'].includes(t.value)),
+      },
     ],
     columns: [
       { key: 'competencia', label: 'Competencia' },

@@ -43,7 +43,12 @@ export async function cargarCombate(db, id) {
   return rows[0];
 }
 
+// Bloquea el combate para modificarlo. Si es de una llave, bloquea antes la
+// llave: propagarLlave (y el retiro de un inscrito) toman primero la llave y
+// después los combates, y usar el mismo orden evita interbloqueos entre
+// acciones simultáneas sobre la misma llave.
 async function bloquearCombate(db, id) {
+  await db.query('SELECT 1 FROM llaves WHERE id = (SELECT id_llave FROM combates WHERE id = $1) FOR UPDATE', [id]);
   const { rows } = await db.query(
     `SELECT t.*, ca.modalidad, ca.jueces, ca.tules_por_encuentro, ca.eleccion_tul, ca.id_tul_desde, ca.id_tul_hasta
      FROM combates t JOIN categorias ca ON ca.id = t.id_categoria

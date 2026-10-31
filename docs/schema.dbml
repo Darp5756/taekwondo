@@ -1,12 +1,14 @@
-// Esquema actualizado (el que implementa backend/db/schema.sql).
+// Esquema actual (el que implementan las migraciones de backend/db/migrations).
 // Cambios respecto a schema-original.dbml:
-//  - Nueva tabla usuarios (login).
+//  - Tablas nuevas: usuarios, estados, tules, inscripciones, llaves,
+//    combate_tules y combate_votos.
 //  - tinyint -> smallint (PostgreSQL).
-//  - Corregida la relación combates -> competencias y agregadas las FK
-//    de combates hacia taekwondistas (rojo, azul, ganador).
-//  - Nueva tabla estados (Venezuela) y taekwondistas.id_estado.
-//  - Borrado lógico: todas las tablas tienen eliminado_en. Los campos "unique"
-//    son únicos solo entre registros activos (índices parciales).
+//  - Corregida la relación combates -> competencias.
+//  - Categorías con modalidad (matsogi / tul), sexo, rango de grado y
+//    configuración de tul.
+//  - Los combates apuntan a inscripciones y guardan su lugar en la llave.
+//  - Borrado lógico: todas las tablas principales tienen eliminado_en. Los
+//    campos "unique" son únicos solo entre registros activos (índices parciales).
 
 enum estado_pendiente_en_curso_finalizado_t {
 	pendiente
@@ -28,30 +30,55 @@ Table usuarios [headercolor: #ffb703] {
 Table academias [headercolor: #175e7a] {
 	id integer [ pk, increment, not null ]
 	nombre varchar(100) [ not null, unique ]
-	eliminado_en timestamptz [ note: 'NULL = activo' ]
+	eliminado_en timestamptz
 }
 
 Table estados [headercolor: #175e7a] {
 	id integer [ pk, increment, not null ]
 	nombre varchar(50) [ not null, unique ]
-	eliminado_en timestamptz [ note: 'NULL = activo' ]
-}
-
-Table categorias [headercolor: #175e7a] {
-	id integer [ pk, increment, not null ]
-	nombre varchar(50) [ not null ]
-	edad_minima smallint [ not null ]
-	edad_maxima smallint [ not null ]
-	peso_minimo_kg smallint [ not null ]
-	peso_maximo_kg smallint [ not null ]
-	eliminado_en timestamptz [ note: 'NULL = activo' ]
+	eliminado_en timestamptz
 }
 
 Table cintas [headercolor: #175e7a] {
 	id integer [ pk, increment, not null ]
 	nombre varchar(30) [ not null, unique ]
 	orden smallint [ not null, unique ]
-	eliminado_en timestamptz [ note: 'NULL = activo' ]
+	eliminado_en timestamptz
+}
+
+Table danes [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(20) [ not null, unique ]
+	numero smallint [ not null, unique ]
+	eliminado_en timestamptz
+}
+
+Table tules [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(30) [ not null, unique ]
+	orden smallint [ not null, unique ]
+	eliminado_en timestamptz
+}
+
+Table categorias [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	nombre varchar(50) [ not null ]
+	modalidad varchar(10) [ not null, default: 'matsogi', note: 'matsogi | tul' ]
+	sexo varchar(10) [ not null, default: 'mixto', note: 'femenino | masculino | mixto' ]
+	edad_minima smallint [ not null ]
+	edad_maxima smallint [ not null ]
+	peso_minimo_kg smallint [ note: 'Obligatorio en matsogi' ]
+	peso_maximo_kg smallint [ note: 'Obligatorio en matsogi' ]
+	id_cinta_minima integer [ ref: > cintas.id ]
+	id_cinta_maxima integer [ ref: > cintas.id ]
+	id_dan_minimo integer [ ref: > danes.id ]
+	id_dan_maximo integer [ ref: > danes.id ]
+	id_tul_desde integer [ ref: > tules.id, note: 'Obligatorio en tul' ]
+	id_tul_hasta integer [ ref: > tules.id, note: 'Obligatorio en tul' ]
+	tules_por_encuentro smallint [ not null, default: 1, note: '1 o 2' ]
+	eleccion_tul varchar(10) [ not null, default: 'sorteo', note: 'sorteo | manual' ]
+	jueces smallint [ not null, default: 3, note: 'Impar' ]
+	eliminado_en timestamptz
 }
 
 Table competencias [headercolor: #175e7a] {
@@ -59,41 +86,90 @@ Table competencias [headercolor: #175e7a] {
 	nombre varchar(100) [ not null ]
 	fecha date [ not null ]
 	lugar varchar(150) [ not null ]
-	eliminado_en timestamptz [ note: 'NULL = activo' ]
-}
-
-Table danes [headercolor: #175e7a] {
-	id integer [ pk, increment, not null ]
-	nombre varchar(20) [ not null, unique ]
-	numero smallint [ not null, unique ]
-	eliminado_en timestamptz [ note: 'NULL = activo' ]
+	eliminado_en timestamptz
 }
 
 Table taekwondistas [headercolor: #175e7a] {
 	id integer [ pk, increment, not null ]
 	id_academia integer [ not null, ref: > academias.id ]
-	id_categoria integer [ not null, ref: > categorias.id ]
+	id_categoria integer [ ref: > categorias.id, note: 'Categoría habitual (opcional)' ]
 	id_cinta integer [ not null, ref: > cintas.id ]
 	id_dan integer [ ref: > danes.id ]
 	id_estado integer [ ref: > estados.id, note: 'Obligatorio en la API; nullable por registros anteriores' ]
 	nombre varchar(150) [ not null ]
+	sexo varchar(10) [ note: 'femenino | masculino. Obligatorio en la API' ]
 	fecha_nacimiento date [ not null ]
 	peso_kg smallint [ not null ]
-	eliminado_en timestamptz [ note: 'NULL = activo' ]
+	eliminado_en timestamptz
+}
+
+Table inscripciones [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	id_competencia integer [ not null, ref: > competencias.id ]
+	id_taekwondista integer [ not null, ref: > taekwondistas.id ]
+	id_categoria integer [ not null, ref: > categorias.id ]
+	peso_kg smallint [ note: 'Peso del pesaje; si es NULL se usa el del taekwondista' ]
+	retirado boolean [ not null, default: false ]
+	fuera_de_categoria boolean [ not null, default: false ]
+	creado_en timestamptz [ not null, default: `now()` ]
+	eliminado_en timestamptz
+
+	indexes {
+		(id_competencia, id_categoria, id_taekwondista) [ unique, note: 'Entre activas' ]
+	}
+}
+
+Table llaves [headercolor: #175e7a] {
+	id integer [ pk, increment, not null ]
+	id_competencia integer [ not null, ref: > competencias.id ]
+	id_categoria integer [ not null, ref: > categorias.id ]
+	tipo varchar(20) [ not null, default: 'eliminacion_simple' ]
+	tercer_puesto boolean [ not null, default: true ]
+	separacion varchar(10) [ not null, default: 'ninguna', note: 'ninguna | academia | estado' ]
+	creado_en timestamptz [ not null, default: `now()` ]
+	eliminado_en timestamptz
+
+	indexes {
+		(id_competencia, id_categoria) [ unique, note: 'Entre activas' ]
+	}
 }
 
 Table combates [headercolor: #175e7a] {
 	id integer [ pk, increment, not null ]
 	id_competencia integer [ not null, ref: > competencias.id ]
 	id_categoria integer [ not null, ref: > categorias.id ]
-	id_taekwondista_rojo integer [ not null, ref: > taekwondistas.id ]
-	id_taekwondista_azul integer [ not null, ref: > taekwondistas.id ]
-	id_taekwondista_ganador integer [ ref: > taekwondistas.id ]
+	id_inscripcion_rojo integer [ ref: > inscripciones.id ]
+	id_inscripcion_azul integer [ ref: > inscripciones.id ]
+	id_inscripcion_ganador integer [ ref: > inscripciones.id ]
+	id_taekwondista_rojo integer [ ref: > taekwondistas.id, note: 'Obsoleta (ver migración 005)' ]
+	id_taekwondista_azul integer [ ref: > taekwondistas.id, note: 'Obsoleta' ]
+	id_taekwondista_ganador integer [ ref: > taekwondistas.id, note: 'Obsoleta' ]
 	ronda varchar(20) [ not null ]
 	estado estado_pendiente_en_curso_finalizado_t [ not null, default: 'pendiente' ]
+	tipo_victoria varchar(20) [ note: 'puntos | decision | ko | abandono | descalificacion | wo | votos | bye' ]
 	puntos_rojo smallint [ not null, default: 0 ]
 	puntos_azul smallint [ not null, default: 0 ]
 	amonestaciones_rojo smallint [ not null, default: 0 ]
 	amonestaciones_azul smallint [ not null, default: 0 ]
-	eliminado_en timestamptz [ note: 'NULL = activo' ]
+	id_llave integer [ ref: > llaves.id, note: 'NULL = combate suelto' ]
+	numero_ronda smallint
+	posicion smallint
+	id_combate_ganador_va_a integer [ ref: > combates.id ]
+	esquina_ganador varchar(4) [ note: 'rojo | azul' ]
+	id_combate_perdedor_va_a integer [ ref: > combates.id, note: 'Combate por el tercer puesto' ]
+	esquina_perdedor varchar(4)
+	resuelto_automaticamente boolean [ not null, default: false, note: 'Bye o W.O. por retiro' ]
+	eliminado_en timestamptz
+}
+
+Table combate_tules [headercolor: #175e7a] {
+	id_combate integer [ pk, ref: > combates.id ]
+	orden smallint [ pk, note: '1 o 2' ]
+	id_tul integer [ not null, ref: > tules.id ]
+}
+
+Table combate_votos [headercolor: #175e7a] {
+	id_combate integer [ pk, ref: > combates.id ]
+	juez smallint [ pk ]
+	voto varchar(4) [ not null, note: 'rojo | azul' ]
 }
