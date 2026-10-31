@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { api } from '../api.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import Alert from '../components/Alert.jsx';
@@ -108,7 +108,13 @@ export default function CrudPage({ resource }) {
             {result.total} {trash ? 'en la papelera' : 'registro(s)'}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {!trash &&
+            resource.headerActions?.map((a) => (
+              <Link key={a.to} to={a.to} className="btn btn-secondary">
+                {a.label}
+              </Link>
+            ))}
           {isAdmin && (
             <button
               onClick={toggleTrash}

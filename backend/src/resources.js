@@ -1,5 +1,7 @@
 import { validarCategoria } from './dominio/categorias.js';
+import { validarInscripcion } from './dominio/inscripciones.js';
 import {
+  bool,
   date,
   id,
   integer,
@@ -131,6 +133,34 @@ export const resources = [
     search: ['t.nombre', 'a.nombre', 'es.nombre'],
     filters: ['id_academia', 'id_categoria', 'id_cinta', 'id_dan', 'id_estado', 'sexo'],
     orderBy: 't.nombre',
+  },
+  {
+    path: 'inscripciones',
+    table: 'inscripciones',
+    fields: z.object({
+      id_competencia: id,
+      id_categoria: id,
+      id_taekwondista: id,
+      peso_kg: optionalSmallUInt,
+      retirado: bool.default(false),
+      fuera_de_categoria: bool.default(false),
+    }),
+    validate: validarInscripcion,
+    select: `
+      SELECT t.*, co.nombre AS competencia, co.fecha AS fecha_competencia,
+             ca.nombre AS categoria, ca.modalidad,
+             tk.nombre AS taekwondista, tk.sexo, tk.id_academia, tk.id_estado,
+             a.nombre AS academia, es.nombre AS estado,
+             COALESCE(t.peso_kg, tk.peso_kg) AS peso_efectivo_kg
+      FROM inscripciones t
+      JOIN competencias co ON co.id = t.id_competencia
+      JOIN categorias ca ON ca.id = t.id_categoria
+      JOIN taekwondistas tk ON tk.id = t.id_taekwondista
+      JOIN academias a ON a.id = tk.id_academia
+      LEFT JOIN estados es ON es.id = tk.id_estado`,
+    search: ['tk.nombre', 'a.nombre', 'ca.nombre', 'co.nombre'],
+    filters: ['id_competencia', 'id_categoria', 'id_taekwondista', 'retirado'],
+    orderBy: 'co.fecha DESC, ca.nombre, tk.nombre',
   },
   {
     path: 'combates',

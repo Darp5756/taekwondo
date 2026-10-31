@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from './middleware/auth.js';
 import { errorHandler, notFound } from './middleware/error.js';
 import { resources } from './resources.js';
 import authRouter from './routes/auth.js';
+import inscripcionesRouter from './routes/inscripciones.js';
 import usuariosRouter from './routes/usuarios.js';
 
 const app = express();
@@ -17,8 +18,11 @@ app.use(express.json({ limit: '100kb' }));
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRouter);
 app.use('/api/usuarios', requireAuth, requireRole('admin'), usuariosRouter);
+// Rutas propias que se resuelven antes que el CRUD genérico del mismo recurso.
+const extraRouters = { inscripciones: inscripcionesRouter };
 for (const resource of resources) {
-  app.use(`/api/${resource.path}`, requireAuth, crudRouter(resource));
+  const extra = extraRouters[resource.path];
+  app.use(`/api/${resource.path}`, requireAuth, ...(extra ? [extra] : []), crudRouter(resource));
 }
 
 app.use(notFound);

@@ -73,6 +73,91 @@ export const resources = [
     rowActions: [{ label: 'Combates', to: (r) => `/combates?id_competencia=${r.id}` }],
   },
   {
+    path: 'inscripciones',
+    title: 'Inscripciones',
+    singular: 'inscripción',
+    icon: '📝',
+    headerActions: [{ label: 'Inscripción múltiple', to: '/inscripciones/multiple' }],
+    filters: [
+      { name: 'id_competencia', label: 'Competencia', source: { path: 'competencias', label: (c) => c.nombre } },
+      { name: 'id_categoria', label: 'Categoría', source: { path: 'categorias', label: categoriaLabel } },
+      {
+        name: 'retirado',
+        label: 'Situación',
+        options: [
+          { value: 'false', label: 'Activos' },
+          { value: 'true', label: 'Retirados' },
+        ],
+      },
+    ],
+    fields: [
+      {
+        name: 'id_competencia',
+        label: 'Competencia',
+        type: 'select',
+        required: true,
+        source: { path: 'competencias', label: (c) => `${c.nombre} (${formatDate(c.fecha)})` },
+      },
+      {
+        name: 'id_taekwondista',
+        label: 'Taekwondista',
+        type: 'select',
+        required: true,
+        source: { path: 'taekwondistas', label: taekwondistaLabel },
+      },
+      {
+        name: 'id_categoria',
+        label: 'Categoría',
+        type: 'select',
+        required: true,
+        source: { path: 'categorias', label: categoriaLabel },
+      },
+      {
+        name: 'peso_kg',
+        label: 'Peso en el pesaje (kg)',
+        type: 'number',
+        min: 0,
+        max: 255,
+        help: 'Opcional. Si está vacío se usa el peso registrado del taekwondista.',
+      },
+      { name: 'retirado', label: 'Retirado: pierde por W.O. los combates que le queden', type: 'checkbox' },
+      {
+        name: 'fuera_de_categoria',
+        label: 'Fuera de categoría: inscribir aunque no cumpla edad, peso, grado o sexo',
+        type: 'checkbox',
+      },
+    ],
+    columns: [
+      { key: 'competencia', label: 'Competencia' },
+      {
+        key: 'taekwondista',
+        label: 'Taekwondista',
+        render: (r) => (
+          <span>
+            {r.taekwondista}
+            {r.fuera_de_categoria && (
+              <span className="ml-2 rounded bg-tkd-gold/20 px-1.5 py-0.5 text-xs text-tkd-gold" title="Inscrito fuera de categoría">
+                excepción
+              </span>
+            )}
+          </span>
+        ),
+      },
+      { key: 'academia', label: 'Academia' },
+      { key: 'categoria', label: 'Categoría', render: (r) => `${r.categoria} · ${modalidadLabel(r.modalidad)}` },
+      {
+        key: 'peso',
+        label: 'Peso',
+        render: (r) => (r.modalidad === 'tul' ? null : `${r.peso_efectivo_kg} kg${r.peso_kg != null ? ' (pesaje)' : ''}`),
+      },
+      {
+        key: 'retirado',
+        label: 'Situación',
+        render: (r) => (r.retirado ? <span className="text-red-300">Retirado</span> : <span className="text-emerald-400">Activo</span>),
+      },
+    ],
+  },
+  {
     path: 'combates',
     title: 'Combates',
     singular: 'combate',
