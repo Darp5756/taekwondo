@@ -30,6 +30,51 @@ export function EstadoBadge({ estado }) {
 const formatDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('es') : '');
 
 const taekwondistaLabel = (t) => `${t.nombre} · ${t.academia}`;
+const inscripcionLabel = (i) => `${i.taekwondista} · ${i.academia}${i.retirado ? ' (retirado)' : ''}`;
+const inscritoEn = (i, form) =>
+  String(i.id_competencia) === String(form.id_competencia) && String(i.id_categoria) === String(form.id_categoria);
+
+export const TIPOS_VICTORIA = [
+  { value: 'puntos', label: 'Por puntos' },
+  { value: 'decision', label: 'Decisión' },
+  { value: 'ko', label: 'KO' },
+  { value: 'abandono', label: 'Abandono' },
+  { value: 'descalificacion', label: 'Descalificación' },
+  { value: 'wo', label: 'W.O.' },
+  { value: 'votos', label: 'Votos de los jueces' },
+  { value: 'bye', label: 'Pase directo' },
+];
+export const tipoVictoriaLabel = (v) => TIPOS_VICTORIA.find((t) => t.value === v)?.label ?? '';
+
+const porDefinir = <span className="text-neutral-500 italic">Por definir</span>;
+
+export function Rivales({ combate: r }) {
+  return (
+    <span className="whitespace-nowrap">
+      <span className="font-semibold text-red-400">{r.taekwondista_rojo ?? porDefinir}</span>
+      <span className="mx-1 text-neutral-500">vs</span>
+      <span className="font-semibold text-blue-400">{r.taekwondista_azul ?? porDefinir}</span>
+    </span>
+  );
+}
+
+// Matsogi: puntos. Tul: votos de los jueces por lado.
+export function Resultado({ combate: r }) {
+  if (r.modalidad === 'tul') {
+    if (!r.votos?.length) return r.tipo_victoria ? tipoVictoriaLabel(r.tipo_victoria) : null;
+    const rojo = r.votos.filter((v) => v === 'rojo').length;
+    return (
+      <span className="font-mono font-bold" title="Votos de los jueces">
+        {rojo} - {r.votos.length - rojo}
+      </span>
+    );
+  }
+  return (
+    <span className="font-mono font-bold">
+      {r.puntos_rojo} - {r.puntos_azul}
+    </span>
+  );
+}
 
 export const MODALIDADES = [
   { value: 'matsogi', label: 'Matsogi (combate)' },
@@ -164,8 +209,12 @@ export const resources = [
     icon: '🥊',
     filters: [
       { name: 'id_competencia', label: 'Competencia', source: { path: 'competencias', label: (c) => c.nombre } },
+      { name: 'id_categoria', label: 'Categoría', source: { path: 'categorias', label: categoriaLabel } },
       { name: 'estado', label: 'Estado', options: ESTADOS },
     ],
+    // Los combates de una llave se gestionan desde la llave y el marcador.
+    canEdit: (r) => !r.id_llave,
+    canDelete: (r) => !r.id_llave,
     fields: [
       {
         name: 'id_competencia',
@@ -179,26 +228,28 @@ export const resources = [
         label: 'Categoría',
         type: 'select',
         required: true,
-        source: { path: 'categorias', label: (c) => c.nombre },
+        source: { path: 'categorias', label: categoriaLabel },
       },
-      { name: 'ronda', label: 'Ronda', required: true, maxLength: 20, placeholder: 'Ej: Cuartos, Semifinal, Final' },
+      { name: 'ronda', label: 'Ronda', required: true, maxLength: 20, placeholder: 'Ej: Exhibición, Final' },
       {
-        name: 'id_taekwondista_rojo',
+        name: 'id_inscripcion_rojo',
         label: 'Competidor rojo',
         type: 'select',
         required: true,
-        source: { path: 'taekwondistas', label: taekwondistaLabel },
-        filter: (t, form) => !form.id_categoria || String(t.id_categoria) === String(form.id_categoria),
+        source: { path: 'inscripciones', label: inscripcionLabel },
+        filter: (i, form) => inscritoEn(i, form) && (!i.retirado || String(i.id) === String(form.id_inscripcion_rojo)),
+        help: 'Solo aparecen los inscritos en la competencia y categoría elegidas.',
       },
       {
-        name: 'id_taekwondista_azul',
+        name: 'id_inscripcion_azul',
         label: 'Competidor azul',
         type: 'select',
         required: true,
-        source: { path: 'taekwondistas', label: taekwondistaLabel },
-        filter: (t, form) =>
-          String(t.id) !== String(form.id_taekwondista_rojo) &&
-          (!form.id_categoria || String(t.id_categoria) === String(form.id_categoria)),
+        source: { path: 'inscripciones', label: inscripcionLabel },
+        filter: (i, form) =>
+          inscritoEn(i, form) &&
+          String(i.id) !== String(form.id_inscripcion_rojo) &&
+          (!i.retirado || String(i.id) === String(form.id_inscripcion_azul)),
       },
       { name: 'estado', label: 'Estado', type: 'select', required: true, options: ESTADOS, default: 'pendiente' },
       { name: 'puntos_rojo', label: 'Puntos rojo', type: 'number', required: true, default: 0 },
@@ -206,41 +257,41 @@ export const resources = [
       { name: 'amonestaciones_rojo', label: 'Avisos rojo', type: 'number', min: 0, required: true, default: 0 },
       { name: 'amonestaciones_azul', label: 'Avisos azul', type: 'number', min: 0, required: true, default: 0 },
       {
-        name: 'id_taekwondista_ganador',
+        name: 'id_inscripcion_ganador',
         label: 'Ganador',
         type: 'select',
-        source: { path: 'taekwondistas', label: taekwondistaLabel },
-        filter: (t, form) => [String(form.id_taekwondista_rojo), String(form.id_taekwondista_azul)].includes(String(t.id)),
+        source: { path: 'inscripciones', label: inscripcionLabel },
+        filter: (i, form) => [String(form.id_inscripcion_rojo), String(form.id_inscripcion_azul)].includes(String(i.id)),
       },
+      { name: 'tipo_victoria', label: 'Tipo de victoria', type: 'select', options: TIPOS_VICTORIA },
     ],
     columns: [
       { key: 'competencia', label: 'Competencia' },
-      { key: 'ronda', label: 'Ronda' },
-      { key: 'categoria', label: 'Categoría' },
       {
-        key: 'rivales',
-        label: 'Rojo vs Azul',
+        key: 'ronda',
+        label: 'Ronda',
         render: (r) => (
           <span className="whitespace-nowrap">
-            <span className="font-semibold text-red-400">{r.taekwondista_rojo}</span>
-            <span className="mx-1 text-neutral-500">vs</span>
-            <span className="font-semibold text-blue-400">{r.taekwondista_azul}</span>
+            {r.ronda}
+            {r.id_llave && <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-xs text-neutral-300">llave</span>}
           </span>
         ),
       },
-      {
-        key: 'marcador',
-        label: 'Marcador',
-        render: (r) => (
-          <span className="font-mono font-bold">
-            {r.puntos_rojo} - {r.puntos_azul}
-          </span>
-        ),
-      },
+      { key: 'categoria', label: 'Categoría', render: (r) => `${r.categoria} · ${modalidadLabel(r.modalidad)}` },
+      { key: 'rivales', label: 'Rojo vs Azul', render: (r) => <Rivales combate={r} /> },
+      { key: 'marcador', label: 'Resultado', render: (r) => <Resultado combate={r} /> },
       { key: 'estado', label: 'Estado', render: (r) => <EstadoBadge estado={r.estado} /> },
       { key: 'taekwondista_ganador', label: 'Ganador' },
     ],
-    rowActions: [{ label: 'Marcador', to: (r) => `/combates/${r.id}/marcador`, primary: true }],
+    rowActions: [
+      {
+        label: 'Marcador',
+        to: (r) => `/combates/${r.id}/marcador`,
+        primary: true,
+        show: (r) => r.id_inscripcion_rojo && r.id_inscripcion_azul,
+      },
+      { label: 'Llave', to: (r) => `/llaves/${r.id_llave}`, show: (r) => r.id_llave },
+    ],
   },
   {
     path: 'taekwondistas',
@@ -511,6 +562,7 @@ export const resources = [
 export const resourceByPath = Object.fromEntries(resources.map((r) => [r.path, r]));
 
 export function RowActionLink({ action, row }) {
+  if (action.show && !action.show(row)) return null;
   return (
     <Link to={action.to(row)} className={`btn px-3 py-1 ${action.primary ? 'btn-primary' : 'btn-secondary'}`}>
       {action.label}

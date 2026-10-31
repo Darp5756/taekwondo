@@ -1,11 +1,19 @@
 import { validarCategoria } from './dominio/categorias.js';
-import { validarInscripcion } from './dominio/inscripciones.js';
+import {
+  SELECT_COMBATES,
+  TIPOS_VICTORIA,
+  antesDeEliminarCombate,
+  antesDeRestaurarCombate,
+  validarCombate,
+} from './dominio/combates.js';
+import { alGuardarInscripcion, validarInscripcion } from './dominio/inscripciones.js';
 import {
   bool,
   date,
   id,
   integer,
   nonNegativeSmallInt,
+  nullable,
   option,
   optionalId,
   optionalSmallUInt,
@@ -146,6 +154,7 @@ export const resources = [
       fuera_de_categoria: bool.default(false),
     }),
     validate: validarInscripcion,
+    afterSave: alGuardarInscripcion,
     select: `
       SELECT t.*, co.nombre AS competencia, co.fecha AS fecha_competencia,
              ca.nombre AS categoria, ca.modalidad,
@@ -165,41 +174,40 @@ export const resources = [
   {
     path: 'combates',
     table: 'combates',
+    // Los combates de llave los crea la llave; por aquí se crean los sueltos y
+    // se editan puntos y avisos. Para finalizar o reabrir: /combates/:id/finalizar y /reabrir.
     fields: z.object({
       id_competencia: id,
       id_categoria: id,
-      id_taekwondista_rojo: id,
-      id_taekwondista_azul: id,
-      id_taekwondista_ganador: optionalId,
+      id_inscripcion_rojo: optionalId,
+      id_inscripcion_azul: optionalId,
+      id_inscripcion_ganador: optionalId,
       ronda: text(20),
-      estado: z.enum(['pendiente', 'en_curso', 'finalizado']).default('pendiente'),
+      estado: option(['pendiente', 'en_curso', 'finalizado']).default('pendiente'),
+      tipo_victoria: nullable(z.enum(TIPOS_VICTORIA)),
       puntos_rojo: smallInt.default(0),
       puntos_azul: smallInt.default(0),
       amonestaciones_rojo: nonNegativeSmallInt.default(0),
       amonestaciones_azul: nonNegativeSmallInt.default(0),
     }),
     check: (d) => {
-      if (d.id_taekwondista_rojo === d.id_taekwondista_azul)
+      if (d.id_inscripcion_rojo != null && d.id_inscripcion_rojo === d.id_inscripcion_azul)
         return 'El competidor rojo y el azul deben ser distintos';
       if (
-        d.id_taekwondista_ganador != null &&
-        ![d.id_taekwondista_rojo, d.id_taekwondista_azul].includes(d.id_taekwondista_ganador)
+        d.id_inscripcion_ganador != null &&
+        ![d.id_inscripcion_rojo, d.id_inscripcion_azul].includes(d.id_inscripcion_ganador)
       )
         return 'El ganador debe ser el competidor rojo o el azul';
       return null;
     },
-    select: `
-      SELECT t.*, co.nombre AS competencia, ca.nombre AS categoria,
-             r.nombre AS taekwondista_rojo, az.nombre AS taekwondista_azul,
-             g.nombre AS taekwondista_ganador
-      FROM combates t
-      JOIN competencias co ON co.id = t.id_competencia
-      JOIN categorias ca ON ca.id = t.id_categoria
-      JOIN taekwondistas r ON r.id = t.id_taekwondista_rojo
-      JOIN taekwondistas az ON az.id = t.id_taekwondista_azul
-      LEFT JOIN taekwondistas g ON g.id = t.id_taekwondista_ganador`,
-    search: ['t.ronda', 'co.nombre', 'r.nombre', 'az.nombre'],
-    filters: ['id_competencia', 'id_categoria', 'estado'],
-    orderBy: 'co.fecha DESC, t.id',
+    validate: validarCombate,
+    beforeDelete: antesDeEliminarCombate,
+    beforeRestore: antesDeRestaurarCombate,
+    select: SELECT_COMBATES,
+    // Los byes y combates sin competidores existen en la llave, pero no se listan.
+    where: 'NOT (t.resuelto_automaticamente AND (t.id_inscripcion_rojo IS NULL OR t.id_inscripcion_azul IS NULL))',
+    search: ['t.ronda', 'co.nombre', 'tr.nombre', 'ta.nombre'],
+    filters: ['id_competencia', 'id_categoria', 'estado', 'id_llave'],
+    orderBy: 'co.fecha DESC, t.id_llave NULLS LAST, t.numero_ronda, t.posicion, t.id',
   },
 ];

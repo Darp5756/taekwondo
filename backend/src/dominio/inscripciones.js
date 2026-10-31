@@ -1,6 +1,7 @@
 // Reglas de las inscripciones que consultan la base.
 import { HttpError } from '../lib/http-error.js';
 import { motivosNoElegible } from './elegibilidad.js';
+import { propagarLlave } from './llaves.js';
 
 export const SQL_CATEGORIA = `
   SELECT c.*, cmin.orden AS cinta_minima_orden, cmax.orden AS cinta_maxima_orden,
@@ -107,4 +108,18 @@ export async function validarInscripcion(d, { db, current }) {
       ]);
   }
   return d;
+}
+
+// Al retirar (o reincorporar) a un inscrito, se recalculan sus llaves: pierde
+// por W.O. los combates que le queden.
+export async function alGuardarInscripcion(id, { db, current }) {
+  if (!current) return;
+  const { rows } = await db.query('SELECT retirado FROM inscripciones WHERE id = $1', [id]);
+  if (rows[0].retirado === current.retirado) return;
+  const { rows: llaves } = await db.query(
+    `SELECT DISTINCT id_llave FROM combates
+     WHERE id_llave IS NOT NULL AND eliminado_en IS NULL AND $1 IN (id_inscripcion_rojo, id_inscripcion_azul)`,
+    [id],
+  );
+  for (const { id_llave } of llaves) await propagarLlave(db, id_llave);
 }

@@ -199,18 +199,22 @@ export default function CrudPage({ resource }) {
                         {resource.rowActions?.map((a) => (
                           <RowActionLink key={a.label} action={a} row={row} />
                         ))}
-                        <button onClick={() => setEditing(row)} className="btn btn-secondary px-3 py-1">
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => {
-                            setDeleteError('');
-                            setDeleting(row);
-                          }}
-                          className="btn px-3 py-1 text-red-300 hover:bg-tkd-red/20"
-                        >
-                          Eliminar
-                        </button>
+                        {(!resource.canEdit || resource.canEdit(row)) && (
+                          <button onClick={() => setEditing(row)} className="btn btn-secondary px-3 py-1">
+                            Editar
+                          </button>
+                        )}
+                        {(!resource.canDelete || resource.canDelete(row)) && (
+                          <button
+                            onClick={() => {
+                              setDeleteError('');
+                              setDeleting(row);
+                            }}
+                            className="btn px-3 py-1 text-red-300 hover:bg-tkd-red/20"
+                          >
+                            Eliminar
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>

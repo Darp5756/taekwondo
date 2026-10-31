@@ -329,41 +329,60 @@ describe('API', { skip }, () => {
       assert.equal(porEstado.body.total, 3);
     });
 
-    test('combates: reglas, PATCH de puntaje y borrado protegido', async () => {
+    test('combates sueltos: reglas, PATCH de puntaje y borrado protegido', async () => {
       ids.competencia = (await create('competencias', { nombre: 'Open 2026', fecha: '2026-11-15', lugar: 'Santiago' })).id;
+      const inscribir = (id_taekwondista) =>
+        create('inscripciones', { id_competencia: ids.competencia, id_categoria: ids.categoria, id_taekwondista });
+      const rojo = await inscribir(ids.rojo);
+      const azul = await inscribir(ids.azul);
+      const tercero = await inscribir(ids.tercero);
       const base = {
         id_competencia: ids.competencia,
         id_categoria: ids.categoria,
-        id_taekwondista_rojo: ids.rojo,
-        id_taekwondista_azul: ids.azul,
+        id_inscripcion_rojo: rojo.id,
+        id_inscripcion_azul: azul.id,
         ronda: 'Final',
       };
 
-      const mismo = await request
-        .post('/api/combates')
-        .set(auth())
-        .send({ ...base, id_taekwondista_azul: ids.rojo });
+      const sinAzul = await request.post('/api/combates').set(auth()).send({ ...base, id_inscripcion_azul: '' });
+      assert.equal(sinAzul.status, 400);
+      assert.equal(sinAzul.body.details[0].field, 'id_inscripcion_azul');
+
+      const mismo = await request.post('/api/combates').set(auth()).send({ ...base, id_inscripcion_azul: rojo.id });
       assert.equal(mismo.status, 400);
 
       const ganadorAjeno = await request
         .post('/api/combates')
         .set(auth())
-        .send({ ...base, id_taekwondista_ganador: ids.tercero });
+        .send({ ...base, id_inscripcion_ganador: tercero.id });
       assert.equal(ganadorAjeno.status, 400);
+
+      const otraCategoria = await create('categorias', {
+        nombre: 'Otra', edad_minima: 0, edad_maxima: 99, peso_minimo_kg: 0, peso_maximo_kg: 200,
+      });
+      const cruzado = await request.post('/api/combates').set(auth()).send({ ...base, id_categoria: otraCategoria.id });
+      assert.equal(cruzado.status, 400);
+      assert.match(cruzado.body.details[0].message, /No está inscrito/);
 
       const combate = await create('combates', base);
       assert.equal(combate.estado, 'pendiente');
       assert.equal(combate.puntos_rojo, 0);
       assert.equal(combate.taekwondista_rojo, 'Ana Rojas');
+      assert.equal(combate.modalidad, 'matsogi');
+      assert.deepEqual(combate.tules, []);
 
       const patch = await request
         .patch(`/api/combates/${combate.id}`)
         .set(auth())
-        .send({ puntos_rojo: 5, amonestaciones_azul: 3, puntos_azul: -1, estado: 'finalizado', id_taekwondista_ganador: ids.rojo });
+        .send({ puntos_rojo: 5, amonestaciones_azul: 3, puntos_azul: -1, estado: 'en_curso' });
       assert.equal(patch.status, 200, JSON.stringify(patch.body));
       assert.equal(patch.body.puntos_rojo, 5);
       assert.equal(patch.body.ronda, 'Final');
-      assert.equal(patch.body.taekwondista_ganador, 'Ana Rojas');
+
+      const fin = await request.post(`/api/combates/${combate.id}/finalizar`).set(auth()).send({ ganador: 'rojo' });
+      assert.equal(fin.status, 200, JSON.stringify(fin.body));
+      assert.equal(fin.body.taekwondista_ganador, 'Ana Rojas');
+      assert.equal(fin.body.tipo_victoria, 'puntos');
 
       const estadoMalo = await request.get('/api/combates?estado=otro').set(auth());
       assert.equal(estadoMalo.status, 400);
@@ -374,7 +393,12 @@ describe('API', { skip }, () => {
       assert.equal(borrarComp.status, 409);
       assert.match(borrarComp.body.error, /dependen/);
 
+      const borrarInsc = await request.delete(`/api/inscripciones/${rojo.id}`).set(auth());
+      assert.equal(borrarInsc.status, 409, 'la inscripción tiene un combate activo');
+
       assert.equal((await request.delete(`/api/combates/${combate.id}`).set(auth())).status, 204);
+      for (const i of [rojo, azul, tercero])
+        assert.equal((await request.delete(`/api/inscripciones/${i.id}`).set(auth())).status, 204);
       assert.equal((await request.delete(`/api/competencias/${ids.competencia}`).set(auth())).status, 204);
     });
 

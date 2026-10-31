@@ -1,46 +1,76 @@
-// Marcador ITF conectado a un combate. Port del HTML original
-// (docs/marcador-original.html): cada cambio de puntos o avisos se guarda en
-// el combate, y el temporizador es local.
+// Marcadores conectados a un combate. Esta pantalla carga el combate y elige
+// el marcador según la modalidad de su categoría.
+//
+// El de matsogi es el port del HTML original (docs/marcador-original.html):
+// cada cambio de puntos o avisos se guarda en el combate, y el temporizador es local.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { api } from '../api.js';
 import Alert from '../components/Alert.jsx';
-import Modal from '../components/Modal.jsx';
+import {
+  EsperandoRivales,
+  FinishModal,
+  PanelButton,
+  ResultadoFinal,
+  SaveIndicator,
+} from '../components/MarcadorComun.jsx';
 import Spinner from '../components/Spinner.jsx';
+import MarcadorTul from './MarcadorTul.jsx';
 
 const ROUND_SECONDS = 90;
 const SAVE_DELAY_MS = 400;
+const TIPOS_MATSOGI = ['puntos', 'decision', 'ko', 'abandono', 'descalificacion', 'wo'];
 
 const formatTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
 export default function Marcador() {
   const { id } = useParams();
   const [combate, setCombate] = useState(null);
-  const [score, setScore] = useState(null);
   const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    api(`/combates/${id}`)
+      .then(setCombate)
+      .catch((err) => setLoadError(err.message));
+  }, [id]);
+
+  const volver = combate?.id_llave ? `/llaves/${combate.id_llave}` : '/combates';
+
+  if (loadError)
+    return (
+      <div className="mx-auto max-w-lg space-y-4 p-8">
+        <Alert>{loadError}</Alert>
+        <Link to="/combates" className="btn btn-secondary">
+          ← Volver a combates
+        </Link>
+      </div>
+    );
+  if (!combate) return <Spinner fullScreen />;
+  if (!combate.id_inscripcion_rojo || !combate.id_inscripcion_azul)
+    return <EsperandoRivales combate={combate} volver={volver} />;
+  if (combate.modalidad === 'tul') return <MarcadorTul combate={combate} setCombate={setCombate} volver={volver} />;
+  return <MarcadorMatsogi combate={combate} setCombate={setCombate} volver={volver} />;
+}
+
+function MarcadorMatsogi({ combate, setCombate, volver }) {
+  const id = combate.id;
+  const [score, setScore] = useState(() => ({
+    puntos_rojo: combate.puntos_rojo,
+    puntos_azul: combate.puntos_azul,
+    amonestaciones_rojo: combate.amonestaciones_rojo,
+    amonestaciones_azul: combate.amonestaciones_azul,
+  }));
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
   const [saveError, setSaveError] = useState('');
   const [time, setTime] = useState(ROUND_SECONDS);
   const [running, setRunning] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState('');
+  const [panelError, setPanelError] = useState('');
 
   const pending = useRef(null);
   const timer = useRef(null);
-
-  useEffect(() => {
-    api(`/combates/${id}`)
-      .then((c) => {
-        setCombate(c);
-        setScore({
-          puntos_rojo: c.puntos_rojo,
-          puntos_azul: c.puntos_azul,
-          amonestaciones_rojo: c.amonestaciones_rojo,
-          amonestaciones_azul: c.amonestaciones_azul,
-        });
-      })
-      .catch((err) => setLoadError(err.message));
-  }, [id]);
 
   const flush = useCallback(async () => {
     clearTimeout(timer.current);
@@ -54,9 +84,9 @@ export default function Marcador() {
       setSaveState('saved');
     } catch (err) {
       setSaveState('error');
-      setSaveError(err.message);
+      setSaveError(`No se pudo guardar: ${err.message}`);
     }
-  }, [id]);
+  }, [id, setCombate]);
 
   const save = useCallback(
     (patch, immediate = false) => {
@@ -80,17 +110,6 @@ export default function Marcador() {
   useEffect(() => {
     if (time === 0) setRunning(false);
   }, [time]);
-
-  if (loadError)
-    return (
-      <div className="mx-auto max-w-lg space-y-4 p-8">
-        <Alert>{loadError}</Alert>
-        <Link to="/combates" className="btn btn-secondary">
-          ← Volver a combates
-        </Link>
-      </div>
-    );
-  if (!combate || !score) return <Spinner fullScreen />;
 
   const finalizado = combate.estado === 'finalizado';
 
@@ -131,14 +150,30 @@ export default function Marcador() {
     setTime(ROUND_SECONDS);
   };
 
-  const finish = async (ganador) => {
+  const finish = async ({ ganador, tipo }) => {
     setRunning(false);
-    await save({ ...score, estado: 'finalizado', id_taekwondista_ganador: ganador }, true);
-    setFinishing(false);
-    setPanelOpen(false);
+    setFinishError('');
+    await save(score, true); // primero se guarda el puntaje pendiente
+    try {
+      setCombate(await api(`/combates/${id}/finalizar`, { method: 'POST', body: { ganador, tipo_victoria: tipo } }));
+      setFinishing(false);
+      setPanelOpen(false);
+    } catch (err) {
+      setFinishError(err.message);
+    }
   };
 
-  const reopen = () => save({ estado: 'en_curso', id_taekwondista_ganador: null }, true);
+  const reopen = async () => {
+    setPanelError('');
+    try {
+      setCombate(await api(`/combates/${id}/reabrir`, { method: 'POST' }));
+    } catch (err) {
+      setPanelError(err.message);
+    }
+  };
+
+  const sugerido =
+    score.puntos_rojo > score.puntos_azul ? 'rojo' : score.puntos_azul > score.puntos_rojo ? 'azul' : null;
 
   const timerLabel = running ? 'PAUSA' : time === ROUND_SECONDS ? 'INICIAR' : 'REANUDAR';
 
@@ -146,8 +181,8 @@ export default function Marcador() {
     <div className="flex h-screen flex-col overflow-hidden bg-tkd-dark text-white">
       {/* Cabecera: tiempo y controles */}
       <header className="relative border-b-2 border-neutral-800 bg-neutral-900 px-4 py-3 text-center">
-        <Link to="/combates" className="absolute top-3 left-4 text-sm text-neutral-400 hover:text-white">
-          ← Combates
+        <Link to={volver} className="absolute top-3 left-4 text-sm text-neutral-400 hover:text-white">
+          ← {combate.id_llave ? 'Llave' : 'Combates'}
         </Link>
         <button
           onClick={() => setPanelOpen(true)}
@@ -162,6 +197,7 @@ export default function Marcador() {
           {formatTime(time)}
         </p>
         {time === 0 && <p className="text-lg font-bold tracking-widest text-tkd-gold">FINAL DEL ROUND</p>}
+        <ResultadoFinal combate={combate} />
         <div className="mt-2 flex justify-center gap-3">
           <button onClick={startStop} disabled={finalizado} className="rounded bg-white px-8 py-2 font-bold text-black disabled:opacity-40">
             {timerLabel}
@@ -182,7 +218,7 @@ export default function Marcador() {
           >
             <p className="max-w-full truncate text-center text-[clamp(1rem,2.5vw,2rem)] font-bold">
               {combate[`taekwondista_${color}`]}
-              {combate.id_taekwondista_ganador === combate[`id_taekwondista_${color}`] && ' 🏆'}
+              {combate.id_inscripcion_ganador === combate[`id_inscripcion_${color}`] && ' 🏆'}
             </p>
             <p className="rounded-full bg-black/30 px-5 py-1 text-[clamp(1rem,2vw,1.8rem)]">
               Avisos: {score[`amonestaciones_${color}`]}
@@ -251,10 +287,18 @@ export default function Marcador() {
 
         <p className="mb-6 text-center text-sm text-neutral-500">Nota: 3 avisos restan automáticamente 1 punto.</p>
 
+        <Alert>{panelError}</Alert>
+
         {finalizado ? (
-          <PanelButton onClick={reopen} className="bg-neutral-700">
-            Reabrir combate
-          </PanelButton>
+          combate.resuelto_automaticamente ? (
+            <p className="text-center text-sm text-neutral-400">
+              Resuelto automáticamente (bye o W.O. por retiro): no se reabre.
+            </p>
+          ) : (
+            <PanelButton onClick={reopen} className="bg-neutral-700">
+              Reabrir combate
+            </PanelButton>
+          )
         ) : (
           <PanelButton onClick={() => setFinishing(true)} className="bg-tkd-gold text-black">
             Finalizar combate
@@ -263,70 +307,18 @@ export default function Marcador() {
       </aside>
 
       {finishing && (
-        <FinishModal combate={combate} score={score} onCancel={() => setFinishing(false)} onConfirm={finish} />
+        <FinishModal
+          combate={combate}
+          tipos={TIPOS_MATSOGI}
+          tipoInicial={sugerido ? 'puntos' : 'decision'}
+          sugerido={sugerido}
+          marcador={(lado) => score[`puntos_${lado}`]}
+          ayuda={sugerido === null ? 'Empate en puntos: elige el ganador por decisión.' : null}
+          error={finishError}
+          onCancel={() => setFinishing(false)}
+          onConfirm={finish}
+        />
       )}
     </div>
-  );
-}
-
-function PanelButton({ className = '', ...props }) {
-  return (
-    <button
-      {...props}
-      className={`my-1.5 w-full rounded-xl p-4 font-bold uppercase transition hover:brightness-110 disabled:opacity-40 ${className}`}
-    />
-  );
-}
-
-function SaveIndicator({ state, error }) {
-  const text = { idle: '', saving: 'Guardando…', saved: '✓ Guardado', error: `⚠ No se pudo guardar: ${error}` }[state];
-  return (
-    <p className={`mt-1 h-4 text-xs ${state === 'error' ? 'text-red-400' : 'text-neutral-500'}`} aria-live="polite">
-      {text}
-    </p>
-  );
-}
-
-function FinishModal({ combate, score, onCancel, onConfirm }) {
-  const sugerido =
-    score.puntos_rojo > score.puntos_azul
-      ? combate.id_taekwondista_rojo
-      : score.puntos_azul > score.puntos_rojo
-        ? combate.id_taekwondista_azul
-        : null;
-  const [ganador, setGanador] = useState(sugerido);
-
-  const option = (color) => {
-    const value = combate[`id_taekwondista_${color}`];
-    return (
-      <label
-        className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 ${
-          ganador === value ? 'border-tkd-gold' : 'border-white/10'
-        } ${color === 'rojo' ? 'bg-tkd-red/30' : 'bg-tkd-blue/30'}`}
-      >
-        <input type="radio" name="ganador" checked={ganador === value} onChange={() => setGanador(value)} className="accent-tkd-gold" />
-        <span className="flex-1 font-semibold">{combate[`taekwondista_${color}`]}</span>
-        <span className="font-mono text-xl font-black">{score[`puntos_${color}`]}</span>
-      </label>
-    );
-  };
-
-  return (
-    <Modal title="Finalizar combate" onClose={onCancel}>
-      <div className="space-y-3">
-        <p className="text-sm text-neutral-400">Selecciona el ganador del combate.</p>
-        {option('rojo')}
-        {option('azul')}
-        {sugerido === null && <p className="text-sm text-tkd-gold">Empate en puntos: elige el ganador por decisión.</p>}
-        <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onCancel} className="btn btn-secondary">
-            Cancelar
-          </button>
-          <button onClick={() => onConfirm(ganador)} disabled={!ganador} className="btn btn-primary">
-            Confirmar
-          </button>
-        </div>
-      </div>
-    </Modal>
   );
 }
