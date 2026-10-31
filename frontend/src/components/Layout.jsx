@@ -12,7 +12,10 @@ const linkClass = ({ isActive }) =>
 export default function Layout() {
   const { user, logout } = useAuth();
   const [changingPassword, setChangingPassword] = useState(false);
-  const items = resources.filter((r) => !r.adminOnly || user.rol === 'admin');
+  // Las llaves no son un CRUD: se insertan en el menú después de las inscripciones.
+  const items = resources
+    .filter((r) => !r.adminOnly || user.rol === 'admin')
+    .flatMap((r) => (r.path === 'inscripciones' ? [r, { path: 'llaves', title: 'Llaves', icon: '🏅' }] : [r]));
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -50,7 +53,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 text-sm md:hidden">
           <span className="truncate text-neutral-400">{user.nombre}</span>
           <div className="flex gap-3">

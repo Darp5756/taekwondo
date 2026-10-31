@@ -115,7 +115,10 @@ export const resources = [
       { key: 'fecha', label: 'Fecha', render: (r) => formatDate(r.fecha) },
       { key: 'lugar', label: 'Lugar' },
     ],
-    rowActions: [{ label: 'Combates', to: (r) => `/combates?id_competencia=${r.id}` }],
+    rowActions: [
+      { label: 'Llaves', to: (r) => `/llaves?id_competencia=${r.id}` },
+      { label: 'Combates', to: (r) => `/combates?id_competencia=${r.id}` },
+    ],
   },
   {
     path: 'inscripciones',

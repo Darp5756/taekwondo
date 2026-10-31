@@ -5,6 +5,9 @@ import Layout from './components/Layout.jsx';
 import CrudPage from './pages/CrudPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import InscripcionMultiple from './pages/InscripcionMultiple.jsx';
+import LlaveDetalle from './pages/LlaveDetalle.jsx';
+import LlaveNueva from './pages/LlaveNueva.jsx';
+import Llaves from './pages/Llaves.jsx';
 import Login from './pages/Login.jsx';
 import Marcador from './pages/Marcador.jsx';
 import NotFound from './pages/NotFound.jsx';
@@ -33,6 +36,9 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="inscripciones/multiple" element={<InscripcionMultiple />} />
+            <Route path="llaves" element={<Llaves />} />
+            <Route path="llaves/nueva" element={<LlaveNueva />} />
+            <Route path="llaves/:id" element={<LlaveDetalle />} />
             {resources.map((r) => (
               <Route
                 key={r.path}

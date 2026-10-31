@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../api.js';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { EstadoBadge, resources } from '../resources.jsx';
+import { EstadoBadge, Rivales, resources } from '../resources.jsx';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -63,9 +63,7 @@ function CombateList({ title, combates, empty }) {
             <li key={c.id} className="flex items-center justify-between gap-3 py-3">
               <div className="min-w-0">
                 <p className="truncate text-sm">
-                  <span className="font-semibold text-red-400">{c.taekwondista_rojo}</span>
-                  <span className="mx-1 text-neutral-500">vs</span>
-                  <span className="font-semibold text-blue-400">{c.taekwondista_azul}</span>
+                  <Rivales combate={c} />
                 </p>
                 <p className="truncate text-xs text-neutral-500">
                   {c.competencia} · {c.categoria} · {c.ronda}
@@ -73,9 +71,11 @@ function CombateList({ title, combates, empty }) {
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <EstadoBadge estado={c.estado} />
-                <Link to={`/combates/${c.id}/marcador`} className="btn btn-primary px-3 py-1">
-                  Marcador
-                </Link>
+                {c.id_inscripcion_rojo && c.id_inscripcion_azul && (
+                  <Link to={`/combates/${c.id}/marcador`} className="btn btn-primary px-3 py-1">
+                    Marcador
+                  </Link>
+                )}
               </div>
             </li>
           ))}
